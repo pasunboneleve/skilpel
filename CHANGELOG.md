@@ -1,0 +1,20 @@
+# Changelog
+
+All notable changes to this project are documented here.
+
+## Unreleased
+
+### Added
+
+- Create the initial `skilpel` Go CLI with `run` support.
+- Add skill and eval-case filtering through `--skill` and `--eval-id`.
+- Add OpenAI-compatible target and judge model calls.
+- Add `with_skill` and `without_skill` baseline comparison.
+- Add pass-rate and baseline-delta gates with CI-friendly exit codes.
+- Add JSON artifacts for run summaries, eval results, prompts, outputs, timings, and grading.
+- Add path containment for attached eval files.
+- Add deterministic tests with fake providers.
+
+### Documentation
+
+- Add README usage, exit-code behavior, and prior-art links.

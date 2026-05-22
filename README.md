@@ -37,6 +37,10 @@ OPENAI_API_KEY=... go run ./cmd/skilpel run \
 - Exit code `1` means evals ran but assertions or gates failed.
 - Exit code `2` means usage, configuration, filesystem, provider, or runtime failure.
 
+## Documentation
+
+- [Changelog](CHANGELOG.md)
+
 ## Prior Art
 
 `skilpel` is inspired by [`agent-skills-eval`](https://github.com/darkrishabh/agent-skills-eval) and agentskills.io-style skill layouts. It deliberately focuses on the subset needed for fast local iteration and CI: skill discovery, eval-case filtering, OpenAI-compatible model calls, baseline comparison, and explicit pass/fail thresholds.
