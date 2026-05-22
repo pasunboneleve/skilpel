@@ -1,0 +1,7 @@
+.kata.local.toml
+/skilpel
+/dist/
+/coverage.out
+/.gocache/
+/.gomodcache/
+/.gopath/
