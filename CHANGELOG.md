@@ -13,7 +13,7 @@ All notable changes to this project are documented here.
 - Add pass-rate and baseline-delta gates with CI-friendly exit codes.
 - Add JSON artifacts for run summaries, eval results, prompts, outputs, timings, and grading.
 - Add path containment for attached eval files.
-- Add deterministic tests with fake providers.
+- Add deterministic tests with fake providers and a compiled-binary shell-script integration fixture.
 - Add YAML eval file support with `evals/evals.yaml` and `evals/evals.yml` precedence before `evals/evals.json`.
 - Add GitHub Actions CI for Go formatting and tests.
 
