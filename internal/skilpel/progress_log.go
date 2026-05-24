@@ -2,6 +2,7 @@ package skilpel
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -10,19 +11,27 @@ import (
 )
 
 func progressLogger(w io.Writer, format string) *slog.Logger {
+	return slog.New(progressHandler(w, format))
+}
+
+func progressHandler(w io.Writer, format string) slog.Handler {
 	switch format {
 	case "pretty":
-		return slog.New(newPrettyProgressHandler(w))
+		return newPrettyProgressHandler(w)
 	case "auto":
 		if file, ok := w.(*os.File); ok && isTerminal(file) {
-			return slog.New(newPrettyProgressHandler(w))
+			return newPrettyProgressHandler(w)
 		}
 	}
-	return structuredLogger(w)
+	return structuredHandler(w)
 }
 
 func structuredLogger(w io.Writer) *slog.Logger {
-	return slog.New(slog.NewJSONHandler(w, &slog.HandlerOptions{
+	return slog.New(structuredHandler(w))
+}
+
+func structuredHandler(w io.Writer) slog.Handler {
+	return slog.NewJSONHandler(w, &slog.HandlerOptions{
 		ReplaceAttr: func(groups []string, attr slog.Attr) slog.Attr {
 			if len(groups) > 0 {
 				return attr
@@ -35,7 +44,7 @@ func structuredLogger(w io.Writer) *slog.Logger {
 			}
 			return attr
 		},
-	}))
+	})
 }
 
 func isTerminal(file *os.File) bool {
@@ -205,4 +214,44 @@ func formatOptionalRate(attrs map[string]any, key string) string {
 		return "-"
 	}
 	return formatRate(attrFloat(attrs, key))
+}
+
+type multiHandler []slog.Handler
+
+func (h multiHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	for _, handler := range h {
+		if handler.Enabled(ctx, level) {
+			return true
+		}
+	}
+	return false
+}
+
+func (h multiHandler) Handle(ctx context.Context, record slog.Record) error {
+	var joined error
+	for _, handler := range h {
+		if !handler.Enabled(ctx, record.Level) {
+			continue
+		}
+		if err := handler.Handle(ctx, record.Clone()); err != nil {
+			joined = errors.Join(joined, err)
+		}
+	}
+	return joined
+}
+
+func (h multiHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	next := make(multiHandler, len(h))
+	for i, handler := range h {
+		next[i] = handler.WithAttrs(attrs)
+	}
+	return next
+}
+
+func (h multiHandler) WithGroup(name string) slog.Handler {
+	next := make(multiHandler, len(h))
+	for i, handler := range h {
+		next[i] = handler.WithGroup(name)
+	}
+	return next
 }

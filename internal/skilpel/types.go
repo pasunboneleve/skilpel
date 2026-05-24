@@ -21,6 +21,7 @@ type Config struct {
 	TargetParams map[string]any `yaml:"targetParams" json:"targetParams"`
 	JudgeParams  map[string]any `yaml:"judgeParams" json:"judgeParams"`
 	LogFormat    string         `yaml:"logFormat" json:"logFormat"`
+	LogFile      string         `yaml:"logFile" json:"logFile"`
 	Logger       *slog.Logger   `yaml:"-" json:"-"`
 }
 

@@ -3,10 +3,13 @@ package skilpel
 import (
 	"bytes"
 	"context"
+	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestMainRejectsUnknownCommand(t *testing.T) {
@@ -110,6 +113,7 @@ func TestParseRunArgsAppliesRepeatedFilters(t *testing.T) {
 		"--no-baseline",
 		"--min-pass", "0.8",
 		"--log-format", "pretty",
+		"--log-file", "work/progress.ndjson",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -128,6 +132,9 @@ func TestParseRunArgsAppliesRepeatedFilters(t *testing.T) {
 	}
 	if cfg.LogFormat != "pretty" {
 		t.Fatalf("unexpected log format: %v", cfg.LogFormat)
+	}
+	if cfg.LogFile != "work/progress.ndjson" {
+		t.Fatalf("unexpected log file: %v", cfg.LogFile)
 	}
 }
 
@@ -207,6 +214,80 @@ func TestPrettyProgressLoggerPreservesWithAttrs(t *testing.T) {
 	}
 }
 
+func TestOpenProgressLoggerKeepsPrettyVisibleAndStructuredFile(t *testing.T) {
+	var visible bytes.Buffer
+	logFile := filepath.Join(t.TempDir(), "logs", "progress.ndjson")
+
+	logger, closeLogger, err := openProgressLogger(&visible, Config{
+		LogFormat: "pretty",
+		LogFile:   logFile,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	logger.InfoContext(context.Background(), "skilpel run started",
+		"event", "run_started",
+		"skills", 1,
+		"evals", 1,
+		"provider", "openai",
+		"target", "target-model",
+		"judge", "judge-model",
+		"baseline", true,
+	)
+	closeLogger()
+
+	if got := visible.String(); !strings.Contains(got, "skilpel: 1 skills, 1 evals") {
+		t.Fatalf("expected visible pretty log, got %q", got)
+	}
+
+	data, err := os.ReadFile(logFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(data)
+	for _, want := range []string{
+		`"event":"run_started"`,
+		`"severity":"INFO"`,
+		`"message":"skilpel run started"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected structured log to include %q, got %q", want, got)
+		}
+	}
+}
+
+func TestOpenProgressLoggerReportsLogFileErrors(t *testing.T) {
+	dir := t.TempDir()
+	logFile := filepath.Join(dir, "existing-dir")
+	if err := os.Mkdir(logFile, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err := openProgressLogger(io.Discard, Config{
+		LogFormat: "pretty",
+		LogFile:   logFile,
+	})
+	if err == nil || !strings.Contains(err.Error(), "create log file") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestMultiHandlerWritesRemainingSinksAfterError(t *testing.T) {
+	var structured bytes.Buffer
+	logger := slog.New(multiHandler{
+		structuredHandler(failingWriter{}),
+		structuredHandler(&structured),
+	})
+
+	err := logger.Handler().Handle(context.Background(), slog.NewRecord(time.Now(), slog.LevelInfo, "message", 0))
+	if err == nil {
+		t.Fatal("expected joined handler error")
+	}
+	if got := structured.String(); !strings.Contains(got, `"message":"message"`) {
+		t.Fatalf("expected second sink to receive record, got %q", got)
+	}
+}
+
 func TestParseRunArgsDoesNotOverrideConfigBaselineUnlessFlagIsSet(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "skilpel.yaml")
 	if err := os.WriteFile(configPath, []byte("baseline: false\n"), 0o644); err != nil {
@@ -228,4 +309,10 @@ func TestParseRunArgsDoesNotOverrideConfigBaselineUnlessFlagIsSet(t *testing.T) 
 	if !cfg.Baseline {
 		t.Fatal("expected explicit --baseline to override config")
 	}
+}
+
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) {
+	return 0, os.ErrClosed
 }

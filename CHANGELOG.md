@@ -4,6 +4,10 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Add `--log-file` for keeping structured JSON progress logs in a file while showing human-readable progress in the terminal or CI logs.
+
 ## [0.2.0] - 2026-05-24
 
 ### Added

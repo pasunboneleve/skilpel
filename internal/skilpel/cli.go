@@ -7,6 +7,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -49,7 +52,12 @@ func Main(ctx context.Context, args []string, stdout, stderr io.Writer) (int, er
 	if err := validateConfig(cfg); err != nil {
 		return exitRuntime, err
 	}
-	cfg.Logger = progressLogger(stderr, cfg.LogFormat)
+	logger, closeLogger, err := openProgressLogger(stderr, cfg)
+	if err != nil {
+		return exitRuntime, err
+	}
+	defer closeLogger()
+	cfg.Logger = logger
 
 	summary, gatePassed, err := Run(ctx, cfg)
 	if err != nil {
@@ -88,6 +96,7 @@ func parseRunArgs(args []string) (Config, error) {
 	minPass := fs.Float64("min-pass", -1, "minimum with_skill pass rate")
 	minDelta := fs.Float64("min-delta", -1, "minimum with_skill minus without_skill pass-rate delta")
 	logFormat := fs.String("log-format", "", "progress log format: auto, json, or pretty")
+	logFile := fs.String("log-file", "", "write structured JSON progress logs to this file")
 	fs.Var(&skills, "skill", "skill relpath to include; repeatable")
 	fs.Var(&evalIDs, "eval-id", "eval id to include; repeatable")
 
@@ -140,6 +149,9 @@ func parseRunArgs(args []string) (Config, error) {
 	if *logFormat != "" {
 		cfg.LogFormat = *logFormat
 	}
+	if *logFile != "" {
+		cfg.LogFile = *logFile
+	}
 	if len(skills) > 0 {
 		cfg.Skills = skills
 	}
@@ -153,6 +165,27 @@ func parseRunArgs(args []string) (Config, error) {
 		cfg.Skills = append(cfg.Skills, extra...)
 	}
 	return cfg, nil
+}
+
+func openProgressLogger(stderr io.Writer, cfg Config) (*slog.Logger, func(), error) {
+	visible := progressHandler(stderr, cfg.LogFormat)
+	if cfg.LogFile == "" {
+		return slog.New(visible), func() {}, nil
+	}
+
+	if dir := filepath.Dir(cfg.LogFile); dir != "." && dir != "" {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return nil, func() {}, fmt.Errorf("create log file directory: %w", err)
+		}
+	}
+	file, err := os.Create(cfg.LogFile)
+	if err != nil {
+		return nil, func() {}, fmt.Errorf("create log file: %w", err)
+	}
+	closeLogger := func() {
+		_ = file.Close()
+	}
+	return slog.New(multiHandler{visible, structuredHandler(file)}), closeLogger, nil
 }
 
 func writeUsage(w io.Writer) {
@@ -253,11 +286,12 @@ Artifacts:
   containing prompts, outputs, timing, grading, and gate details.
 
 Logs:
-  During runs, skilpel writes progress logs to stderr. Use --log-format=json
-  for GCP-readable JSON lines, --log-format=pretty for terminal progress, or
+  During runs, skilpel writes progress logs to stderr. Use --log-format=json for
+  GCP-readable JSON lines, --log-format=pretty for terminal progress, or
   --log-format=auto to choose pretty only when stderr is an interactive
-  terminal. The final summary remains JSON on stdout for scripts and CI
-  artifacts.
+  terminal. Use --log-file to also write structured JSON progress logs to a file
+  without printing those JSON lines in the terminal or CI step log. The final
+  summary remains JSON on stdout for scripts and CI artifacts.
 
 Exit codes:
   0  The run completed and all configured gates passed.
@@ -279,4 +313,5 @@ Options:
   --api-key-env <name>  environment variable containing the API key
   --min-pass <rate>     minimum with_skill pass rate
   --min-delta <rate>    minimum with_skill minus without_skill pass-rate delta
-  --log-format <format> progress logs: auto, json, or pretty`
+  --log-format <format> progress logs: auto, json, or pretty
+  --log-file <path>     also write structured JSON progress logs to a file`
