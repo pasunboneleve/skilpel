@@ -39,6 +39,9 @@ func structuredLogger(w io.Writer) *slog.Logger {
 }
 
 func isTerminal(file *os.File) bool {
+	if file == nil {
+		return false
+	}
 	info, err := file.Stat()
 	if err != nil {
 		return false
@@ -48,13 +51,19 @@ func isTerminal(file *os.File) bool {
 
 type prettyProgressHandler struct {
 	w     io.Writer
+	state *prettyProgressState
+	attrs []slog.Attr
+	group string
+}
+
+type prettyProgressState struct {
 	mu    sync.Mutex
 	total int
 	done  int
 }
 
 func newPrettyProgressHandler(w io.Writer) *prettyProgressHandler {
-	return &prettyProgressHandler{w: w}
+	return &prettyProgressHandler{w: w, state: &prettyProgressState{}}
 }
 
 func (h *prettyProgressHandler) Enabled(context.Context, slog.Level) bool {
@@ -63,23 +72,26 @@ func (h *prettyProgressHandler) Enabled(context.Context, slog.Level) bool {
 
 func (h *prettyProgressHandler) Handle(_ context.Context, record slog.Record) error {
 	attrs := map[string]any{}
+	for _, attr := range h.attrs {
+		attrs[attr.Key] = attr.Value.Any()
+	}
 	record.Attrs(func(attr slog.Attr) bool {
 		attrs[attr.Key] = attr.Value.Any()
 		return true
 	})
 
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	h.state.mu.Lock()
+	defer h.state.mu.Unlock()
 
 	switch attrs["event"] {
 	case "run_started":
-		h.total = attrInt(attrs, "evals")
-		h.done = 0
+		h.state.total = attrInt(attrs, "evals")
+		h.state.done = 0
 		_, err := fmt.Fprintf(
 			h.w,
 			"skilpel: %d skills, %d evals | provider=%s target=%s judge=%s baseline=%t\n",
 			attrInt(attrs, "skills"),
-			h.total,
+			h.state.total,
 			attrString(attrs, "provider"),
 			attrString(attrs, "target"),
 			attrString(attrs, "judge"),
@@ -87,7 +99,7 @@ func (h *prettyProgressHandler) Handle(_ context.Context, record slog.Record) er
 		)
 		return err
 	case "eval_completed":
-		h.done++
+		h.state.done++
 		status := "PASS"
 		if attrInt(attrs, "failed") > 0 {
 			status = "FAIL"
@@ -96,8 +108,8 @@ func (h *prettyProgressHandler) Handle(_ context.Context, record slog.Record) er
 			h.w,
 			"%s [%d/%d] %s | %s | assertions=%d/%d | with=%s baseline=%s delta=%s\n",
 			status,
-			h.done,
-			h.total,
+			h.state.done,
+			h.state.total,
 			attrString(attrs, "rel_path"),
 			displayEval(attrs),
 			attrInt(attrs, "passed"),
@@ -113,12 +125,25 @@ func (h *prettyProgressHandler) Handle(_ context.Context, record slog.Record) er
 	}
 }
 
-func (h *prettyProgressHandler) WithAttrs([]slog.Attr) slog.Handler {
-	return h
+func (h *prettyProgressHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	next := *h
+	next.attrs = append(slicesClone(h.attrs), attrs...)
+	return &next
 }
 
-func (h *prettyProgressHandler) WithGroup(string) slog.Handler {
-	return h
+func (h *prettyProgressHandler) WithGroup(name string) slog.Handler {
+	next := *h
+	next.group = name
+	return &next
+}
+
+func slicesClone[T any](values []T) []T {
+	if len(values) == 0 {
+		return nil
+	}
+	cloned := make([]T, len(values))
+	copy(cloned, values)
+	return cloned
 }
 
 func displayEval(attrs map[string]any) string {

@@ -179,6 +179,34 @@ func TestPrettyProgressLoggerWritesHumanReadableProgress(t *testing.T) {
 	}
 }
 
+func TestProgressLoggerHandlesTypedNilFileAsJSON(t *testing.T) {
+	var file *os.File
+
+	logger := progressLogger(file, "auto")
+
+	if logger == nil {
+		t.Fatal("expected logger")
+	}
+}
+
+func TestPrettyProgressLoggerPreservesWithAttrs(t *testing.T) {
+	var logs bytes.Buffer
+	logger := progressLogger(&logs, "pretty").With("rel_path", "demo-skill")
+
+	logger.InfoContext(context.Background(), "skilpel eval completed",
+		"event", "eval_completed",
+		"eval_id", "case-a",
+		"passed", 1,
+		"failed", 0,
+		"total", 1,
+		"with_skill_pass_rate", 1.0,
+	)
+
+	if got := logs.String(); !strings.Contains(got, "PASS [1/0] demo-skill | case-a") {
+		t.Fatalf("expected With attrs in pretty log, got %q", got)
+	}
+}
+
 func TestParseRunArgsDoesNotOverrideConfigBaselineUnlessFlagIsSet(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "skilpel.yaml")
 	if err := os.WriteFile(configPath, []byte("baseline: false\n"), 0o644); err != nil {
