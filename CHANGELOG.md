@@ -14,6 +14,7 @@ All notable changes to this project are documented here.
 - Add JSON artifacts for run summaries, eval results, prompts, outputs, timings, and grading.
 - Add path containment for attached eval files.
 - Add deterministic tests with fake providers.
+- Add YAML eval file support with `evals/evals.yaml` and `evals/evals.yml` precedence before `evals/evals.json`.
 
 ### Fixed
 

@@ -30,12 +30,35 @@ OPENAI_API_KEY=... go run ./cmd/skilpel run \
 ## Current Shape
 
 - `run` discovers skills, executes eval cases, writes JSON artifacts, and applies gates.
+- Skill evals may be stored as `evals/evals.yaml`, `evals/evals.yml`, or `evals/evals.json`.
+- `evals/evals.yaml` is preferred; `evals/evals.yml` is read next; `evals/evals.json` is the fallback.
 - `--skill` narrows skill selection by repository-relative path.
 - `--eval-id` narrows eval selection by exact ID.
 - `--baseline` enables `without_skill` comparison and baseline-delta gates.
 - Exit code `0` means the run completed and all configured gates passed.
 - Exit code `1` means evals ran but assertions or gates failed.
 - Exit code `2` means usage, configuration, filesystem, provider, or runtime failure.
+
+YAML evals use the same structure as JSON evals:
+
+```yaml
+skill_name: my-skill
+evals:
+  - id: basic
+    name: basic behavior
+    prompt: Apply the skill to this input.
+    files:
+      - evals/files/input.txt
+    assertions:
+      - Produces the expected result.
+      - text: Explains the decision with evidence.
+```
+
+For downstream CI, install a pinned executable rather than tracking a moving branch:
+
+```bash
+go install github.com/pasunboneleve/skilpel/cmd/skilpel@$SKILPEL_VERSION
+```
 
 ## Documentation
 

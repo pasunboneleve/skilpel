@@ -18,19 +18,25 @@ type skillFrontmatter struct {
 }
 
 type evalsFile struct {
-	SkillName string          `json:"skill_name"`
-	Evals     []evalCaseRaw   `json:"evals"`
-	Defaults  json.RawMessage `json:"defaults,omitempty"`
+	SkillName string        `json:"skill_name" yaml:"skill_name"`
+	Evals     []evalCaseRaw `json:"evals" yaml:"evals"`
+	Defaults  any           `json:"defaults,omitempty" yaml:"defaults,omitempty"`
 }
 
 type evalCaseRaw struct {
-	ID             any             `json:"id"`
-	Name           string          `json:"name"`
-	Prompt         string          `json:"prompt"`
-	ExpectedOutput string          `json:"expected_output"`
-	Files          []string        `json:"files"`
-	Assertions     json.RawMessage `json:"assertions"`
-	Params         map[string]any  `json:"params"`
+	ID             any            `json:"id" yaml:"id"`
+	Name           string         `json:"name" yaml:"name"`
+	Prompt         string         `json:"prompt" yaml:"prompt"`
+	ExpectedOutput string         `json:"expected_output" yaml:"expected_output"`
+	Files          []string       `json:"files" yaml:"files"`
+	Assertions     any            `json:"assertions" yaml:"assertions"`
+	Params         map[string]any `json:"params" yaml:"params"`
+}
+
+var evalFileNames = []string{
+	filepath.Join("evals", "evals.yaml"),
+	filepath.Join("evals", "evals.yml"),
+	filepath.Join("evals", "evals.json"),
 }
 
 func discoverSkills(root string, relpaths []string, evalIDs []string) ([]Skill, error) {
@@ -62,12 +68,14 @@ func discoverSkills(root string, relpaths []string, evalIDs []string) ([]Skill, 
 			return nil
 		}
 		if _, err := os.Stat(filepath.Join(path, "SKILL.md")); err == nil {
-			if _, err := os.Stat(filepath.Join(path, "evals", "evals.json")); err == nil {
+			if _, _, err := findEvalsFile(path); err == nil {
 				rel, err := filepath.Rel(root, path)
 				if err != nil {
 					return err
 				}
 				rels = append(rels, filepath.ToSlash(rel))
+			} else if !os.IsNotExist(err) {
+				return err
 			}
 		}
 		return nil
@@ -109,9 +117,13 @@ func loadSkill(root, rel string, evalIDs []string, requireEvalIDs bool) (Skill, 
 		name = filepath.Base(dir)
 	}
 
-	evals, err := readEvals(filepath.Join(dir, "evals", "evals.json"))
+	evalPath, evalRel, err := findEvalsFile(dir)
 	if err != nil {
-		return Skill{}, fmt.Errorf("read %s/evals/evals.json: %w", rel, err)
+		return Skill{}, fmt.Errorf("find evals for %s: %w", rel, err)
+	}
+	evals, err := readEvals(evalPath)
+	if err != nil {
+		return Skill{}, fmt.Errorf("read %s/%s: %w", rel, evalRel, err)
 	}
 	evals, err = filterEvalIDs(evals, evalIDs, rel, requireEvalIDs)
 	if err != nil {
@@ -145,14 +157,33 @@ func parseSkillMarkdown(markdown string) (skillFrontmatter, string, error) {
 	return fm, strings.TrimSpace(markdown[len(match[0]):]), nil
 }
 
+func findEvalsFile(dir string) (string, string, error) {
+	for _, rel := range evalFileNames {
+		path := filepath.Join(dir, rel)
+		if _, err := os.Stat(path); err == nil {
+			return path, filepath.ToSlash(rel), nil
+		} else if !os.IsNotExist(err) {
+			return "", "", err
+		}
+	}
+	return "", "", os.ErrNotExist
+}
+
 func readEvals(path string) ([]EvalCase, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 	var raw evalsFile
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, err
+	switch ext := strings.ToLower(filepath.Ext(path)); ext {
+	case ".yaml", ".yml":
+		if err := yaml.Unmarshal(data, &raw); err != nil {
+			return nil, fmt.Errorf("parse YAML evals: %w", err)
+		}
+	default:
+		if err := json.Unmarshal(data, &raw); err != nil {
+			return nil, fmt.Errorf("parse JSON evals: %w", err)
+		}
 	}
 	if len(raw.Evals) == 0 {
 		return nil, fmt.Errorf("evals array is empty")
@@ -186,13 +217,20 @@ func readEvals(path string) ([]EvalCase, error) {
 	return evals, nil
 }
 
-func parseAssertions(raw json.RawMessage) ([]string, error) {
-	if len(raw) == 0 || string(raw) == "null" {
+func parseAssertions(raw any) ([]string, error) {
+	if raw == nil {
 		return nil, nil
 	}
-	var values []any
-	if err := json.Unmarshal(raw, &values); err != nil {
-		return nil, err
+	values, ok := raw.([]any)
+	if !ok {
+		if strings, ok := raw.([]string); ok {
+			values = make([]any, 0, len(strings))
+			for _, value := range strings {
+				values = append(values, value)
+			}
+		} else {
+			return nil, fmt.Errorf("must be an array")
+		}
 	}
 	assertions := make([]string, 0, len(values))
 Assertions:
@@ -201,6 +239,14 @@ Assertions:
 		case string:
 			assertions = append(assertions, v)
 		case map[string]any:
+			for _, key := range []string{"text", "value", "criterion"} {
+				if s, ok := v[key].(string); ok {
+					assertions = append(assertions, s)
+					continue Assertions
+				}
+			}
+			return nil, fmt.Errorf("[%d] object needs text, value, or criterion", i)
+		case map[any]any:
 			for _, key := range []string{"text", "value", "criterion"} {
 				if s, ok := v[key].(string); ok {
 					assertions = append(assertions, s)
