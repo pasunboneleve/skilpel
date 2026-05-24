@@ -169,6 +169,21 @@ func TestRunWithProviderFailsGateForSmallDelta(t *testing.T) {
 func TestRunWithProviderAccumulatesAssertionTotals(t *testing.T) {
 	root := t.TempDir()
 	writeTestSkill(t, root)
+	evals := `{
+  "skill_name": "demo-skill",
+  "evals": [
+    {
+      "id": "case-a",
+      "name": "case a",
+      "prompt": "Run case A.",
+      "files": ["evals/files/input.txt"],
+      "assertions": ["passes", "reports missing detail"]
+    }
+  ]
+}`
+	if err := os.WriteFile(filepath.Join(root, "demo-skill", "evals", "evals.json"), []byte(evals), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	summary, gatePassed, err := RunWithProvider(context.Background(), Config{
 		Root:      root,

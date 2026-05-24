@@ -18,12 +18,62 @@ func grade(ctx context.Context, provider Provider, model string, eval EvalCase, 
 		return Grading{}, prompt, err
 	}
 
-	var grading Grading
-	if err := json.Unmarshal([]byte(cleanJudgeJSON(result.Output)), &grading); err != nil {
-		return Grading{}, prompt, fmt.Errorf("judge returned invalid JSON: %w", err)
+	grading, err := parseGrading(cleanJudgeJSON(result.Output), eval.Assertions)
+	if err != nil {
+		grading = failClosedGrading(eval.Assertions, result.Output, err)
 	}
 	normalizeGrading(&grading)
 	return grading, prompt, nil
+}
+
+func parseGrading(output string, assertions []string) (Grading, error) {
+	var raw struct {
+		AssertionResults json.RawMessage `json:"assertion_results"`
+	}
+	if err := json.Unmarshal([]byte(output), &raw); err != nil {
+		return Grading{}, err
+	}
+	if len(raw.AssertionResults) == 0 || string(raw.AssertionResults) == "null" {
+		return Grading{}, fmt.Errorf("grading response missing assertion_results")
+	}
+	var rawResults []json.RawMessage
+	if err := json.Unmarshal(raw.AssertionResults, &rawResults); err != nil {
+		return Grading{}, err
+	}
+
+	results := make([]AssertionResult, 0, len(assertions))
+	for i, assertion := range assertions {
+		if i >= len(rawResults) {
+			results = append(results, AssertionResult{
+				Text:     assertion,
+				Passed:   false,
+				Evidence: "judge omitted this assertion result",
+			})
+			continue
+		}
+		var rawResult struct {
+			Passed   bool   `json:"passed"`
+			Evidence string `json:"evidence"`
+		}
+		if err := json.Unmarshal(rawResults[i], &rawResult); err != nil {
+			results = append(results, AssertionResult{
+				Text:     assertion,
+				Passed:   false,
+				Evidence: "judge omitted this assertion result",
+			})
+			continue
+		}
+		evidence := strings.TrimSpace(rawResult.Evidence)
+		if evidence == "" {
+			evidence = "judge did not provide concrete evidence"
+		}
+		results = append(results, AssertionResult{
+			Text:     assertion,
+			Passed:   rawResult.Passed,
+			Evidence: evidence,
+		})
+	}
+	return Grading{AssertionResults: results}, nil
 }
 
 func cleanJudgeJSON(output string) string {
@@ -39,17 +89,48 @@ func cleanJudgeJSON(output string) string {
 	return strings.TrimSpace(trimmed)
 }
 
-func judgePrompt(eval EvalCase, output string) string {
-	var b strings.Builder
-	b.WriteString("You are a strict JSON-only evaluator.\n")
-	b.WriteString("Return only JSON with assertion_results and summary.\n\n")
-	b.WriteString("Model output:\n")
-	b.WriteString(output)
-	b.WriteString("\n\nAssertions:\n")
-	for i, assertion := range eval.Assertions {
-		fmt.Fprintf(&b, "%d. %s\n", i+1, assertion)
+func failClosedGrading(assertions []string, output string, cause error) Grading {
+	evidence := fmt.Sprintf("judge returned unparseable response: %s; error: %v", truncate(output, 500), cause)
+	results := make([]AssertionResult, 0, len(assertions))
+	for _, assertion := range assertions {
+		results = append(results, AssertionResult{Text: assertion, Passed: false, Evidence: evidence})
 	}
-	return b.String()
+	return Grading{AssertionResults: results}
+}
+
+func truncate(value string, max int) string {
+	if len(value) <= max {
+		return value
+	}
+	return value[:max] + "..."
+}
+
+func judgePrompt(eval EvalCase, output string) string {
+	assertions, err := json.MarshalIndent(eval.Assertions, "", "  ")
+	if err != nil {
+		assertions = []byte("[]")
+	}
+	return fmt.Sprintf(`You are grading an agentskills.io evaluation run.
+
+Grading principles:
+- Require concrete evidence for every PASS; quote or reference the output.
+- Do not give the benefit of the doubt.
+- PASS an assertion only if every condition in the assertion text holds.
+- A label without substance is a FAIL.
+
+Return only JSON. Use STRICT JSON only. No markdown. Shape:
+{"assertion_results":[{"text":"...","passed":true,"evidence":"..."}],"summary":{"passed":0,"failed":0,"total":0,"pass_rate":0}}
+
+Rules:
+- Include every assertion exactly once and copy the full assertion text verbatim into text.
+- Use short concrete evidence: quote, snippet, or file reference.
+- Summary may be included, but it will be recomputed by the caller.
+
+Assertions:
+%s
+
+Model output:
+%s`, string(assertions), output)
 }
 
 func normalizeGrading(grading *Grading) {

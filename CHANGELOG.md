@@ -15,6 +15,10 @@ All notable changes to this project are documented here.
 - Add path containment for attached eval files.
 - Add deterministic tests with fake providers.
 
+### Fixed
+
+- Treat malformed judge JSON as failed assertions with diagnostic evidence.
+
 ### Documentation
 
 - Add README usage, exit-code behavior, and prior-art links.
