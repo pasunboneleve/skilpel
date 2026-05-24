@@ -25,6 +25,10 @@ func (r *repeated) Set(v string) error {
 }
 
 func Main(ctx context.Context, args []string, stdout, stderr io.Writer) (int, error) {
+	if wantsVersion(args) {
+		fmt.Fprintf(stdout, "skilpel %s\n", Version())
+		return exitOK, nil
+	}
 	if wantsHelp(args) {
 		writeUsage(stdout)
 		return exitOK, nil
@@ -171,11 +175,16 @@ func wantsHelp(args []string) bool {
 	return false
 }
 
+func wantsVersion(args []string) bool {
+	return len(args) == 1 && (args[0] == "version" || args[0] == "--version" || args[0] == "-v")
+}
+
 const helpTemplate = `skilpel evaluates Codex-style skills by running each eval with and without
 the skill, then judging whether the skill improved the result.
 
 Usage:
   skilpel run [options] [skill-relpath ...]
+  skilpel version
   skilpel help
   skilpel --help
 

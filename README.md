@@ -84,6 +84,7 @@ go test ./...
 
 - `go run ./cmd/skilpel --help`
 - `go run ./cmd/skilpel run --help`
+- `go run ./cmd/skilpel version`
 - [Changelog](CHANGELOG.md)
 
 ## License
@@ -99,6 +100,8 @@ For downstream CI, install a tagged version rather than tracking a moving branch
 ```bash
 go install github.com/pasunboneleve/skilpel/cmd/skilpel@$SKILPEL_VERSION
 ```
+
+Tagged releases also publish prebuilt archives for Linux amd64 and macOS arm64.
 
 ## Prior Art
 

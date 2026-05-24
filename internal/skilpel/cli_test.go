@@ -81,6 +81,23 @@ func TestMainHelpSubcommandPrintsUsageAndExitsOK(t *testing.T) {
 	}
 }
 
+func TestMainVersionPrintsVersionAndExitsOK(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code, err := Main(context.Background(), []string{"version"}, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if code != exitOK {
+		t.Fatalf("expected ok exit, got %d", code)
+	}
+	if got := strings.TrimSpace(stdout.String()); got != "skilpel "+Version() {
+		t.Fatalf("version output = %q, want skilpel %s", got, Version())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected empty stderr, got %q", stderr.String())
+	}
+}
+
 func TestParseRunArgsAppliesRepeatedFilters(t *testing.T) {
 	cfg, err := parseRunArgs([]string{
 		"--root", "skills",

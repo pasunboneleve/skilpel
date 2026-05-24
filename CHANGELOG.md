@@ -2,7 +2,9 @@
 
 All notable changes to this project are documented here.
 
-## Unreleased
+## [Unreleased]
+
+## [0.1.0] - 2026-05-24
 
 ### Added
 
@@ -21,6 +23,8 @@ All notable changes to this project are documented here.
 - Add MIT license metadata.
 - Add a README CI badge linked to the main-branch workflow runs.
 - Add a real OpenAI canary for the compiled shell-script skill workflow.
+- Add `skilpel version` and `--version`.
+- Add tag-driven release archives for Linux amd64 and macOS arm64.
 
 ### Fixed
 
