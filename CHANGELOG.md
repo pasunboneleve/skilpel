@@ -4,6 +4,10 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Publish release executables directly with SHA-256 checksum assets.
+
 ## [0.1.0] - 2026-05-24
 
 ### Added

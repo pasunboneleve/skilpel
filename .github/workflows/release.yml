@@ -48,10 +48,10 @@ jobs:
         include:
           - goos: linux
             goarch: amd64
-            archive: skilpel-linux-amd64.tar.gz
+            binary: skilpel-linux-amd64
           - goos: darwin
             goarch: arm64
-            archive: skilpel-darwin-arm64.tar.gz
+            binary: skilpel-darwin-arm64
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -82,7 +82,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          go build -trimpath -o dist/skilpel ./cmd/skilpel
+          go build -trimpath -o "dist/${{ matrix.binary }}" ./cmd/skilpel
 
       - name: Verify release binary version
         if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
@@ -90,22 +90,26 @@ jobs:
         run: |
           set -euo pipefail
           expected="skilpel ${GITHUB_REF_NAME#v}"
-          actual="$(./dist/skilpel version)"
+          actual="$(./dist/${{ matrix.binary }} version)"
           if [[ "$actual" != "$expected" ]]; then
             echo "version output $actual does not match $expected" >&2
             exit 1
           fi
 
-      - name: Package release archive
+      - name: Generate checksum
         shell: bash
         run: |
           set -euo pipefail
-          tar -C dist -czf "${{ matrix.archive }}" skilpel
+          cd dist
+          shasum -a 256 "${{ matrix.binary }}" > "${{ matrix.binary }}.sha256"
 
-      - name: Upload GitHub release asset
+      - name: Upload GitHub release assets
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh release upload "${GITHUB_REF_NAME}" "${{ matrix.archive }}" --clobber
+          gh release upload "${GITHUB_REF_NAME}" \
+            "dist/${{ matrix.binary }}" \
+            "dist/${{ matrix.binary }}.sha256" \
+            --clobber
