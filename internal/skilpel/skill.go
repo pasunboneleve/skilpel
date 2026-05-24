@@ -37,7 +37,7 @@ func discoverSkills(root string, relpaths []string, evalIDs []string) ([]Skill, 
 	if len(relpaths) > 0 {
 		skills := make([]Skill, 0, len(relpaths))
 		for _, rel := range relpaths {
-			skill, err := loadSkill(root, rel, evalIDs)
+			skill, err := loadSkill(root, rel, evalIDs, true)
 			if err != nil {
 				return nil, err
 			}
@@ -71,9 +71,12 @@ func discoverSkills(root string, relpaths []string, evalIDs []string) ([]Skill, 
 
 	skills := make([]Skill, 0, len(rels))
 	for _, rel := range rels {
-		skill, err := loadSkill(root, rel, evalIDs)
+		skill, err := loadSkill(root, rel, evalIDs, false)
 		if err != nil {
 			return nil, err
+		}
+		if len(skill.Evals) == 0 {
+			continue
 		}
 		skills = append(skills, skill)
 	}
@@ -83,7 +86,7 @@ func discoverSkills(root string, relpaths []string, evalIDs []string) ([]Skill, 
 	return skills, nil
 }
 
-func loadSkill(root, rel string, evalIDs []string) (Skill, error) {
+func loadSkill(root, rel string, evalIDs []string, requireEvalIDs bool) (Skill, error) {
 	dir := filepath.Join(root, filepath.FromSlash(rel))
 	skillMD, err := os.ReadFile(filepath.Join(dir, "SKILL.md"))
 	if err != nil {
@@ -100,7 +103,7 @@ func loadSkill(root, rel string, evalIDs []string) (Skill, error) {
 	if err != nil {
 		return Skill{}, fmt.Errorf("read %s/evals/evals.json: %w", rel, err)
 	}
-	evals, err = filterEvalIDs(evals, evalIDs, rel)
+	evals, err = filterEvalIDs(evals, evalIDs, rel, requireEvalIDs)
 	if err != nil {
 		return Skill{}, err
 	}
@@ -216,7 +219,7 @@ func stringifyID(id any) string {
 	}
 }
 
-func filterEvalIDs(evals []EvalCase, ids []string, rel string) ([]EvalCase, error) {
+func filterEvalIDs(evals []EvalCase, ids []string, rel string, requireAll bool) ([]EvalCase, error) {
 	if len(ids) == 0 {
 		return evals, nil
 	}
@@ -241,6 +244,9 @@ func filterEvalIDs(evals []EvalCase, ids []string, rel string) ([]EvalCase, erro
 		}
 	}
 	if len(missing) > 0 {
+		if !requireAll {
+			return filtered, nil
+		}
 		return nil, fmt.Errorf("missing eval ids for %s: %s", rel, strings.Join(missing, ", "))
 	}
 	return filtered, nil

@@ -42,6 +42,13 @@ func TestParseGradingRejectsNonArrayAssertionResults(t *testing.T) {
 	}
 }
 
+func TestCleanJudgeJSONExtractsFencedJSONAfterPreamble(t *testing.T) {
+	got := cleanJudgeJSON("Here is the grading:\n\n```json\n{\"assertion_results\":[]}\n```")
+	if got != `{"assertion_results":[]}` {
+		t.Fatalf("unexpected cleaned JSON: %q", got)
+	}
+}
+
 func TestFailClosedGradingUsesOriginalAssertionsAndEvidence(t *testing.T) {
 	grading := failClosedGrading([]string{"first assertion", "second assertion"}, "not json", errExample{})
 	normalizeGrading(&grading)

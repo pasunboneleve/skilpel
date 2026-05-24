@@ -93,6 +93,31 @@ func writeTestSkill(t *testing.T, root string) {
 	}
 }
 
+func writeTestSkillWithEval(t *testing.T, root, name, evalID string) {
+	t.Helper()
+	dir := filepath.Join(root, name)
+	if err := os.MkdirAll(filepath.Join(dir, "evals"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("---\nname: "+name+"\ndescription: Test skill.\n---\n\nUse the skill.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	evals := `{
+  "skill_name": "` + name + `",
+  "evals": [
+    {
+      "id": "` + evalID + `",
+      "name": "` + evalID + `",
+      "prompt": "Run ` + evalID + `.",
+      "assertions": ["passes"]
+    }
+  ]
+}`
+	if err := os.WriteFile(filepath.Join(dir, "evals", "evals.json"), []byte(evals), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRunWithProviderFiltersEvalAndWritesArtifacts(t *testing.T) {
 	root := t.TempDir()
 	writeTestSkill(t, root)
@@ -135,6 +160,34 @@ func TestRunWithProviderFiltersEvalAndWritesArtifacts(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(workspace, "summary.json")); err != nil {
 		t.Fatalf("missing summary artifact: %v", err)
+	}
+}
+
+func TestRunWithProviderSkipsAutoDiscoveredSkillsWithoutEvalID(t *testing.T) {
+	root := t.TempDir()
+	writeTestSkillWithEval(t, root, "match-skill", "target-case")
+	writeTestSkillWithEval(t, root, "other-skill", "other-case")
+
+	summary, gatePassed, err := RunWithProvider(context.Background(), Config{
+		Root:      root,
+		Workspace: filepath.Join(t.TempDir(), "workspace"),
+		Baseline:  true,
+		Target:    "target",
+		Judge:     "judge",
+		BaseURL:   "http://example.test/v1",
+		APIKeyEnv: "OPENAI_API_KEY",
+		EvalIDs:   []string{"target-case"},
+		MinPass:   0.9,
+		MinDelta:  0.2,
+	}, &fakeProvider{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !gatePassed {
+		t.Fatalf("expected gates to pass: %#v", summary.GateFailures)
+	}
+	if len(summary.Skills) != 1 || summary.Skills[0].RelPath != "match-skill" {
+		t.Fatalf("expected only matching skill, got %#v", summary.Skills)
 	}
 }
 
@@ -237,7 +290,7 @@ func TestRunWithProviderReportsMissingEvalID(t *testing.T) {
 func TestUserPromptRejectsEscapingEvalFile(t *testing.T) {
 	root := t.TempDir()
 	writeTestSkill(t, root)
-	skill, err := loadSkill(root, "demo-skill", []string{"case-a"})
+	skill, err := loadSkill(root, "demo-skill", []string{"case-a"}, true)
 	if err != nil {
 		t.Fatal(err)
 	}

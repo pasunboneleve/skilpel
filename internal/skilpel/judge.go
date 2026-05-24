@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 )
+
+var fencedJSONRE = regexp.MustCompile("(?is)```(?:json)?\\s*(.*?)\\s*```")
 
 func grade(ctx context.Context, provider Provider, model string, eval EvalCase, output string, params map[string]any) (Grading, string, error) {
 	prompt := judgePrompt(eval, output)
@@ -78,15 +81,10 @@ func parseGrading(output string, assertions []string) (Grading, error) {
 
 func cleanJudgeJSON(output string) string {
 	trimmed := strings.TrimSpace(output)
-	if !strings.HasPrefix(trimmed, "```") {
-		return trimmed
+	if match := fencedJSONRE.FindStringSubmatch(trimmed); len(match) == 2 {
+		return strings.TrimSpace(match[1])
 	}
-	trimmed = strings.TrimPrefix(trimmed, "```")
-	trimmed = strings.TrimSpace(trimmed)
-	trimmed = strings.TrimPrefix(trimmed, "json")
-	trimmed = strings.TrimSpace(trimmed)
-	trimmed = strings.TrimSuffix(trimmed, "```")
-	return strings.TrimSpace(trimmed)
+	return trimmed
 }
 
 func failClosedGrading(assertions []string, output string, cause error) Grading {
