@@ -3,6 +3,7 @@ package skilpel
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
@@ -34,6 +35,24 @@ func RunWithProvider(ctx context.Context, cfg Config, provider Provider) (Summar
 	if err != nil {
 		return Summary{}, false, err
 	}
+	totalEvals := 0
+	for _, skill := range skills {
+		totalEvals += len(skill.Evals)
+	}
+	if cfg.Logger != nil {
+		cfg.Logger.InfoContext(ctx, "skilpel run started",
+			slog.String("event", "run_started"),
+			slog.Int("skills", len(skills)),
+			slog.Int("evals", totalEvals),
+			slog.String("workspace", workspace),
+			slog.Bool("baseline", cfg.Baseline),
+			slog.Float64("min_pass", cfg.MinPass),
+			slog.Float64("min_delta", cfg.MinDelta),
+			slog.String("provider", cfg.Provider),
+			slog.String("target", cfg.Target),
+			slog.String("judge", cfg.Judge),
+		)
+	}
 
 	summary := Summary{
 		Workspace: workspace,
@@ -61,8 +80,10 @@ func RunWithProvider(ctx context.Context, cfg Config, provider Provider) (Summar
 }
 
 func runSkill(ctx context.Context, cfg Config, provider Provider, workspace string, skill Skill) (SkillSummary, error) {
-	var withRates []float64
-	var withoutRates []float64
+	var withRateTotal float64
+	var withoutRateTotal float64
+	var withRateCount int
+	var withoutRateCount int
 	var passed int
 	var failed int
 
@@ -72,16 +93,18 @@ func runSkill(ctx context.Context, cfg Config, provider Provider, workspace stri
 			return SkillSummary{}, err
 		}
 		withSummary := result.ModeResults[WithSkill].Grading.Summary
-		withRates = append(withRates, withSummary.PassRate)
+		withRateTotal += withSummary.PassRate
+		withRateCount++
 		passed += withSummary.Passed
 		failed += withSummary.Failed
 		if cfg.Baseline {
-			withoutRates = append(withoutRates, result.ModeResults[WithoutSkill].Grading.Summary.PassRate)
+			withoutRateTotal += result.ModeResults[WithoutSkill].Grading.Summary.PassRate
+			withoutRateCount++
 		}
 	}
 
-	with := mean(withRates)
-	without := mean(withoutRates)
+	with := meanFromTotal(withRateTotal, withRateCount)
+	without := meanFromTotal(withoutRateTotal, withoutRateCount)
 	summary := SkillSummary{
 		Skill:            skill.Name,
 		RelPath:          skill.RelPath,
@@ -131,6 +154,7 @@ func runEval(ctx context.Context, cfg Config, provider Provider, workspace strin
 	if err := writeJSON(filepath.Join(workspace, slugify(skill.RelPath, slugify(skill.Name, "skill")), eSlug, "result.json"), result); err != nil {
 		return RunResult{}, fmt.Errorf("write eval result: %w", err)
 	}
+	emitEvalCompletedLog(ctx, cfg.Logger, workspace, skill, eval, eSlug, result)
 	return result, nil
 }
 
@@ -186,20 +210,19 @@ func mergeParams(base, override map[string]any) map[string]any {
 	return merged
 }
 
-func mean(values []float64) float64 {
-	if len(values) == 0 {
+func meanFromTotal(total float64, count int) float64 {
+	if count == 0 {
 		return 0
 	}
-	var total float64
-	for _, value := range values {
-		total += value
-	}
-	return total / float64(len(values))
+	return total / float64(count)
 }
 
 func gateFailures(skills []SkillSummary, cfg Config) []string {
 	var failures []string
 	for _, skill := range skills {
+		if skill.Failed > 0 {
+			failures = append(failures, fmt.Sprintf("%s has %d failed with_skill assertions", skill.RelPath, skill.Failed))
+		}
 		if skill.WithSkillPass < cfg.MinPass {
 			failures = append(failures, fmt.Sprintf("%s with_skill pass rate %.3f < %.3f", skill.RelPath, skill.WithSkillPass, cfg.MinPass))
 		}
@@ -208,4 +231,32 @@ func gateFailures(skills []SkillSummary, cfg Config) []string {
 		}
 	}
 	return failures
+}
+
+func emitEvalCompletedLog(ctx context.Context, logger *slog.Logger, workspace string, skill Skill, eval EvalCase, evalSlug string, result RunResult) {
+	if logger == nil {
+		return
+	}
+	withSummary := result.ModeResults[WithSkill].Grading.Summary
+	attrs := []slog.Attr{
+		slog.String("event", "eval_completed"),
+		slog.String("skill", skill.Name),
+		slog.String("rel_path", skill.RelPath),
+		slog.String("eval_id", eval.ID),
+		slog.String("eval_name", eval.Name),
+		slog.String("eval_slug", evalSlug),
+		slog.Int("passed", withSummary.Passed),
+		slog.Int("failed", withSummary.Failed),
+		slog.Int("total", withSummary.Total),
+		slog.Float64("with_skill_pass_rate", withSummary.PassRate),
+		slog.String("result_path", filepath.Join(workspace, slugify(skill.RelPath, slugify(skill.Name, "skill")), evalSlug, "result.json")),
+	}
+	if withoutRun, ok := result.ModeResults[WithoutSkill]; ok {
+		withoutRate := withoutRun.Grading.Summary.PassRate
+		attrs = append(attrs,
+			slog.Float64("without_skill_pass_rate", withoutRate),
+			slog.Float64("delta", withSummary.PassRate-withoutRate),
+		)
+	}
+	logger.LogAttrs(ctx, slog.LevelInfo, "skilpel eval completed", attrs...)
 }

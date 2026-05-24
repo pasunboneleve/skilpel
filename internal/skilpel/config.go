@@ -19,6 +19,7 @@ func defaultConfig() Config {
 		Target:    "gpt-4o-mini",
 		MinPass:   0.90,
 		MinDelta:  0.20,
+		LogFormat: "auto",
 	}
 }
 
@@ -74,6 +75,11 @@ func validateConfig(cfg Config) error {
 	}
 	if cfg.MinDelta < 0 || cfg.MinDelta > 1 {
 		return errors.New("min delta must be between 0 and 1")
+	}
+	switch cfg.LogFormat {
+	case "", "auto", "json", "pretty":
+	default:
+		return errors.New("log format must be auto, json, or pretty")
 	}
 	return nil
 }

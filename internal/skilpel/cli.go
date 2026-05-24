@@ -49,6 +49,7 @@ func Main(ctx context.Context, args []string, stdout, stderr io.Writer) (int, er
 	if err := validateConfig(cfg); err != nil {
 		return exitRuntime, err
 	}
+	cfg.Logger = progressLogger(stderr, cfg.LogFormat)
 
 	summary, gatePassed, err := Run(ctx, cfg)
 	if err != nil {
@@ -86,6 +87,7 @@ func parseRunArgs(args []string) (Config, error) {
 	apiKeyEnv := fs.String("api-key-env", "", "environment variable containing the API key")
 	minPass := fs.Float64("min-pass", -1, "minimum with_skill pass rate")
 	minDelta := fs.Float64("min-delta", -1, "minimum with_skill minus without_skill pass-rate delta")
+	logFormat := fs.String("log-format", "", "progress log format: auto, json, or pretty")
 	fs.Var(&skills, "skill", "skill relpath to include; repeatable")
 	fs.Var(&evalIDs, "eval-id", "eval id to include; repeatable")
 
@@ -134,6 +136,9 @@ func parseRunArgs(args []string) (Config, error) {
 	}
 	if *minDelta >= 0 {
 		cfg.MinDelta = *minDelta
+	}
+	if *logFormat != "" {
+		cfg.LogFormat = *logFormat
 	}
 	if len(skills) > 0 {
 		cfg.Skills = skills
@@ -247,6 +252,13 @@ Artifacts:
   The workspace receives summary.json plus per-skill and per-eval JSON artifacts
   containing prompts, outputs, timing, grading, and gate details.
 
+Logs:
+  During runs, skilpel writes progress logs to stderr. Use --log-format=json
+  for GCP-readable JSON lines, --log-format=pretty for terminal progress, or
+  --log-format=auto to choose pretty only when stderr is an interactive
+  terminal. The final summary remains JSON on stdout for scripts and CI
+  artifacts.
+
 Exit codes:
   0  The run completed and all configured gates passed.
   1  Evals ran, but assertions or gates failed.
@@ -266,4 +278,5 @@ Options:
   --base-url <url>      provider base URL override
   --api-key-env <name>  environment variable containing the API key
   --min-pass <rate>     minimum with_skill pass rate
-  --min-delta <rate>    minimum with_skill minus without_skill pass-rate delta`
+  --min-delta <rate>    minimum with_skill minus without_skill pass-rate delta
+  --log-format <format> progress logs: auto, json, or pretty`

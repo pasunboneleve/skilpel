@@ -1,6 +1,9 @@
 package skilpel
 
-import "time"
+import (
+	"log/slog"
+	"time"
+)
 
 type Config struct {
 	Root         string         `yaml:"root" json:"root"`
@@ -17,6 +20,8 @@ type Config struct {
 	MinDelta     float64        `yaml:"minDelta" json:"minDelta"`
 	TargetParams map[string]any `yaml:"targetParams" json:"targetParams"`
 	JudgeParams  map[string]any `yaml:"judgeParams" json:"judgeParams"`
+	LogFormat    string         `yaml:"logFormat" json:"logFormat"`
+	Logger       *slog.Logger   `yaml:"-" json:"-"`
 }
 
 type Skill struct {
