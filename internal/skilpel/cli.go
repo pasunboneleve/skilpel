@@ -75,9 +75,10 @@ func parseRunArgs(args []string) (Config, error) {
 	workspace := fs.String("workspace", "", "workspace for JSON artifacts")
 	baseline := fs.Bool("baseline", false, "run without_skill baseline")
 	noBaseline := fs.Bool("no-baseline", false, "disable without_skill baseline")
+	provider := fs.String("provider", "", "provider plugin: openai, xai, qwen, anthropic, claude, or gemini")
 	target := fs.String("target", "", "target model")
 	judge := fs.String("judge", "", "judge model")
-	baseURL := fs.String("base-url", "", "OpenAI-compatible base URL")
+	baseURL := fs.String("base-url", "", "provider base URL override")
 	apiKeyEnv := fs.String("api-key-env", "", "environment variable containing the API key")
 	minPass := fs.Float64("min-pass", -1, "minimum with_skill pass rate")
 	minDelta := fs.Float64("min-delta", -1, "minimum with_skill minus without_skill pass-rate delta")
@@ -108,6 +109,9 @@ func parseRunArgs(args []string) (Config, error) {
 	}
 	if setFlags["no-baseline"] && *noBaseline {
 		cfg.Baseline = false
+	}
+	if *provider != "" {
+		cfg.Provider = *provider
 	}
 	if *target != "" {
 		cfg.Target = *target
@@ -153,9 +157,10 @@ Options:
   --eval-id <id>        eval id to include; repeatable
   --baseline            run without_skill baseline (default true)
   --no-baseline         disable baseline
+  --provider <name>     provider: openai, xai, qwen, anthropic, claude, or gemini
   --target <model>      target model
   --judge <model>       judge model
-  --base-url <url>      OpenAI-compatible base URL
+  --base-url <url>      provider base URL override
   --api-key-env <name>  environment variable containing the API key
   --min-pass <rate>     minimum with_skill pass rate
   --min-delta <rate>    minimum with_skill minus without_skill pass-rate delta`)

@@ -22,7 +22,7 @@ go test ./...
 go run ./cmd/skilpel run --root ./skills --skill my-skill --eval-id basic --baseline
 ```
 
-Model-backed runs need an OpenAI-compatible chat completions endpoint:
+Model-backed runs use the provider plugin selected by `--provider` or `provider` in config. Supported providers are `openai`, `xai`, `qwen`, `anthropic`/`claude`, and `gemini`.
 
 ```bash
 OPENAI_API_KEY=... go run ./cmd/skilpel run \
@@ -31,12 +31,14 @@ OPENAI_API_KEY=... go run ./cmd/skilpel run \
   --eval-id basic \
   --workspace ./.skilpel \
   --baseline \
+  --provider openai \
   --target gpt-4o-mini \
   --judge gpt-4o-mini \
-  --base-url https://api.openai.com/v1 \
   --min-pass 0.90 \
   --min-delta 0.20
 ```
+
+OpenAI-compatible providers use their default base URLs unless `--base-url` is set. Default API key variables are `OPENAI_API_KEY`, `XAI_API_KEY`, `DASHSCOPE_API_KEY`, `ANTHROPIC_API_KEY`, and `GEMINI_API_KEY`; override them with `--api-key-env` when needed.
 
 ## Eval Files
 
@@ -84,7 +86,7 @@ go test ./...
 
 ## Status
 
-`skilpel` is an MVP. It supports OpenAI-compatible chat completions, per-skill eval files, baseline comparison, JSON artifacts, and pass-rate or baseline-delta gates.
+`skilpel` is an MVP. It supports provider plugins, per-skill eval files, baseline comparison, JSON artifacts, and pass-rate or baseline-delta gates.
 
 For downstream CI, install a tagged version rather than tracking a moving branch:
 
@@ -94,4 +96,4 @@ go install github.com/pasunboneleve/skilpel/cmd/skilpel@$SKILPEL_VERSION
 
 ## Prior Art
 
-`skilpel` is inspired by [`agent-skills-eval`](https://github.com/darkrishabh/agent-skills-eval) and agentskills.io-style skill layouts. It focuses on the subset needed for fast local iteration and CI: skill discovery, eval-case filtering, OpenAI-compatible model calls, baseline comparison, and explicit pass/fail thresholds.
+`skilpel` is inspired by [`agent-skills-eval`](https://github.com/darkrishabh/agent-skills-eval) and agentskills.io-style skill layouts. It focuses on the subset needed for fast local iteration and CI: skill discovery, eval-case filtering, provider-backed model calls, baseline comparison, and explicit pass/fail thresholds.

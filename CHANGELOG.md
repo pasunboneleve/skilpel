@@ -16,6 +16,7 @@ All notable changes to this project are documented here.
 - Add deterministic tests with fake providers and a compiled-binary shell-script integration fixture.
 - Add YAML eval file support with `evals/evals.yaml` and `evals/evals.yml` precedence before `evals/evals.json`.
 - Add GitHub Actions CI for Go formatting and tests.
+- Add provider plugins for OpenAI, xAI, Qwen, Anthropic/Claude, and Gemini using standard Go SDKs where available.
 
 ### Fixed
 

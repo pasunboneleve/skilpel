@@ -6,6 +6,7 @@ type Config struct {
 	Root         string         `yaml:"root" json:"root"`
 	Workspace    string         `yaml:"workspace" json:"workspace"`
 	Baseline     bool           `yaml:"baseline" json:"baseline"`
+	Provider     string         `yaml:"provider" json:"provider"`
 	Target       string         `yaml:"target" json:"target"`
 	Judge        string         `yaml:"judge" json:"judge"`
 	BaseURL      string         `yaml:"baseUrl" json:"baseUrl"`
