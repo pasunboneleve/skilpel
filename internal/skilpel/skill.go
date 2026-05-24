@@ -100,7 +100,10 @@ func loadSkill(root, rel string, evalIDs []string, requireEvalIDs bool) (Skill, 
 		return Skill{}, fmt.Errorf("read %s/SKILL.md: %w", rel, err)
 	}
 
-	frontmatter, body := parseSkillMarkdown(string(skillMD))
+	frontmatter, body, err := parseSkillMarkdown(string(skillMD))
+	if err != nil {
+		return Skill{}, fmt.Errorf("parse %s/SKILL.md frontmatter: %w", rel, err)
+	}
 	name := frontmatter.Name
 	if name == "" {
 		name = filepath.Base(dir)
@@ -126,18 +129,20 @@ func loadSkill(root, rel string, evalIDs []string, requireEvalIDs bool) (Skill, 
 	}, nil
 }
 
-func parseSkillMarkdown(markdown string) (skillFrontmatter, string) {
+func parseSkillMarkdown(markdown string) (skillFrontmatter, string, error) {
 	if !strings.HasPrefix(markdown, "---\n") && !strings.HasPrefix(markdown, "---\r\n") {
-		return skillFrontmatter{}, strings.TrimSpace(markdown)
+		return skillFrontmatter{}, strings.TrimSpace(markdown), nil
 	}
 	re := regexp.MustCompile(`(?s)^---\r?\n(.*?)\r?\n---\r?\n?`)
 	match := re.FindStringSubmatch(markdown)
 	if len(match) != 2 {
-		return skillFrontmatter{}, strings.TrimSpace(markdown)
+		return skillFrontmatter{}, "", fmt.Errorf("unterminated frontmatter")
 	}
 	var fm skillFrontmatter
-	_ = yaml.Unmarshal([]byte(match[1]), &fm)
-	return fm, strings.TrimSpace(markdown[len(match[0]):])
+	if err := yaml.Unmarshal([]byte(match[1]), &fm); err != nil {
+		return skillFrontmatter{}, "", err
+	}
+	return fm, strings.TrimSpace(markdown[len(match[0]):]), nil
 }
 
 func readEvals(path string) ([]EvalCase, error) {

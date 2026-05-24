@@ -22,6 +22,7 @@ All notable changes to this project are documented here.
 - Extract fenced judge JSON even when the model includes preamble text.
 - Match reordered judge results back to assertions by assertion text.
 - Allow multi-skill explicit runs when an `--eval-id` matches only some selected skills.
+- Report malformed skill frontmatter instead of silently ignoring it.
 - Preserve HTTP status context for non-JSON provider error responses.
 - Avoid artifact slug collisions for named eval cases that lack IDs.
 - Treat malformed judge JSON as failed assertions with diagnostic evidence.

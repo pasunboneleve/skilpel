@@ -316,6 +316,19 @@ func TestRunWithProviderReportsMissingEvalID(t *testing.T) {
 	}
 }
 
+func TestLoadSkillReportsMalformedFrontmatter(t *testing.T) {
+	root := t.TempDir()
+	writeTestSkill(t, root)
+	if err := os.WriteFile(filepath.Join(root, "demo-skill", "SKILL.md"), []byte("---\nname: [\n---\n\nUse the skill.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := loadSkill(root, "demo-skill", nil, true)
+	if err == nil || !strings.Contains(err.Error(), "frontmatter") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestUserPromptRejectsEscapingEvalFile(t *testing.T) {
 	root := t.TempDir()
 	writeTestSkill(t, root)
