@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -86,6 +87,10 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req CompletionRequest) (C
 		return CompletionResult{}, err
 	}
 	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return CompletionResult{}, fmt.Errorf("read provider response: %w", err)
+	}
 
 	var parsed struct {
 		Choices []struct {
@@ -99,8 +104,11 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req CompletionRequest) (C
 		} `json:"usage"`
 		Error any `json:"error"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
-		return CompletionResult{}, fmt.Errorf("decode provider response: %w", err)
+	if err := json.Unmarshal(respBody, &parsed); err != nil {
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return CompletionResult{}, fmt.Errorf("provider returned %s with non-JSON response: %s", resp.Status, truncate(string(respBody), 500))
+		}
+		return CompletionResult{}, fmt.Errorf("decode provider response from %s: %w", resp.Status, err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return CompletionResult{}, fmt.Errorf("provider returned %s: %v", resp.Status, parsed.Error)
