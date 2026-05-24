@@ -21,6 +21,7 @@ All notable changes to this project are documented here.
 - Skip auto-discovered skills that do not match a workspace-wide `--eval-id` filter.
 - Extract fenced judge JSON even when the model includes preamble text.
 - Match reordered judge results back to assertions by assertion text.
+- Allow multi-skill explicit runs when an `--eval-id` matches only some selected skills.
 - Preserve HTTP status context for non-JSON provider error responses.
 - Avoid artifact slug collisions for named eval cases that lack IDs.
 - Treat malformed judge JSON as failed assertions with diagnostic evidence.

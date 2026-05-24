@@ -3,6 +3,7 @@ package skilpel
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestParseGradingNormalizesStrictAssertionArray(t *testing.T) {
@@ -90,6 +91,16 @@ func TestFailClosedGradingUsesOriginalAssertionsAndEvidence(t *testing.T) {
 		if !strings.Contains(result.Evidence, "judge returned unparseable response") {
 			t.Fatalf("missing diagnostic evidence: %q", result.Evidence)
 		}
+	}
+}
+
+func TestTruncatePreservesUTF8Boundaries(t *testing.T) {
+	got := truncate("áéíóú", 3)
+	if got != "áéí..." {
+		t.Fatalf("unexpected truncated string: %q", got)
+	}
+	if !utf8.ValidString(got) {
+		t.Fatalf("truncate returned invalid UTF-8: %q", got)
 	}
 }
 

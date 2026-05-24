@@ -36,12 +36,19 @@ type evalCaseRaw struct {
 func discoverSkills(root string, relpaths []string, evalIDs []string) ([]Skill, error) {
 	if len(relpaths) > 0 {
 		skills := make([]Skill, 0, len(relpaths))
+		requireEvalIDs := len(relpaths) == 1
 		for _, rel := range relpaths {
-			skill, err := loadSkill(root, rel, evalIDs, true)
+			skill, err := loadSkill(root, rel, evalIDs, requireEvalIDs)
 			if err != nil {
 				return nil, err
 			}
+			if len(skill.Evals) == 0 {
+				continue
+			}
 			skills = append(skills, skill)
+		}
+		if missing := missingEvalIDs(skills, evalIDs); len(missing) > 0 {
+			return nil, fmt.Errorf("missing eval ids for selected skills: %s", strings.Join(missing, ", "))
 		}
 		return skills, nil
 	}
@@ -250,4 +257,23 @@ func filterEvalIDs(evals []EvalCase, ids []string, rel string, requireAll bool) 
 		return nil, fmt.Errorf("missing eval ids for %s: %s", rel, strings.Join(missing, ", "))
 	}
 	return filtered, nil
+}
+
+func missingEvalIDs(skills []Skill, ids []string) []string {
+	if len(ids) == 0 {
+		return nil
+	}
+	found := map[string]bool{}
+	for _, skill := range skills {
+		for _, eval := range skill.Evals {
+			found[eval.ID] = true
+		}
+	}
+	var missing []string
+	for _, id := range ids {
+		if !found[id] {
+			missing = append(missing, id)
+		}
+	}
+	return missing
 }

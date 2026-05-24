@@ -118,10 +118,11 @@ func failClosedGrading(assertions []string, output string, cause error) Grading 
 }
 
 func truncate(value string, max int) string {
-	if len(value) <= max {
+	runes := []rune(value)
+	if len(runes) <= max {
 		return value
 	}
-	return value[:max] + "..."
+	return string(runes[:max]) + "..."
 }
 
 func judgePrompt(eval EvalCase, output string) string {
