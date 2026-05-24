@@ -15,6 +15,7 @@ All notable changes to this project are documented here.
 - Add path containment for attached eval files.
 - Add deterministic tests with fake providers.
 - Add YAML eval file support with `evals/evals.yaml` and `evals/evals.yml` precedence before `evals/evals.json`.
+- Add GitHub Actions CI for Go formatting and tests.
 
 ### Fixed
 
