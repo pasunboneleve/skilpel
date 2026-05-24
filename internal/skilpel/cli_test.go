@@ -53,6 +53,7 @@ func TestMainNoArgsPrintsAgentHelpAndExitsOK(t *testing.T) {
 		"Eval files:",
 		"Gates:",
 		"Artifacts:",
+		"Logs:",
 		"Exit codes:",
 	} {
 		if !strings.Contains(help, want) {

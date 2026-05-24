@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 )
 
@@ -49,6 +50,7 @@ func Main(ctx context.Context, args []string, stdout, stderr io.Writer) (int, er
 	if err := validateConfig(cfg); err != nil {
 		return exitRuntime, err
 	}
+	cfg.Logger = structuredLogger(stderr)
 
 	summary, gatePassed, err := Run(ctx, cfg)
 	if err != nil {
@@ -165,6 +167,23 @@ func writeUsage(w io.Writer) {
 	fmt.Fprintln(w)
 }
 
+func structuredLogger(w io.Writer) *slog.Logger {
+	return slog.New(slog.NewJSONHandler(w, &slog.HandlerOptions{
+		ReplaceAttr: func(groups []string, attr slog.Attr) slog.Attr {
+			if len(groups) > 0 {
+				return attr
+			}
+			switch attr.Key {
+			case slog.LevelKey:
+				attr.Key = "severity"
+			case slog.MessageKey:
+				attr.Key = "message"
+			}
+			return attr
+		},
+	}))
+}
+
 func wantsHelp(args []string) bool {
 	if len(args) == 0 {
 		return true
@@ -246,6 +265,10 @@ Gates:
 Artifacts:
   The workspace receives summary.json plus per-skill and per-eval JSON artifacts
   containing prompts, outputs, timing, grading, and gate details.
+
+Logs:
+  During runs, skilpel writes structured JSON progress logs to stderr. The
+  final summary remains JSON on stdout for scripts and CI artifacts.
 
 Exit codes:
   0  The run completed and all configured gates passed.

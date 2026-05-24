@@ -4,6 +4,14 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Stream structured progress logs to stderr during eval runs while preserving the final summary JSON on stdout.
+
+### Changed
+
+- Accumulate skill pass-rate totals without retaining per-eval rate slices.
+
 ## [0.1.0] - 2026-05-24
 
 ### Added

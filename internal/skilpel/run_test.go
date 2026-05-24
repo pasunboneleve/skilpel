@@ -1,6 +1,7 @@
 package skilpel
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -188,6 +189,73 @@ func TestRunWithProviderFiltersEvalAndWritesArtifacts(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(workspace, "summary.json")); err != nil {
 		t.Fatalf("missing summary artifact: %v", err)
 	}
+}
+
+func TestRunWithProviderStreamsStructuredEvalLogs(t *testing.T) {
+	root := t.TempDir()
+	writeTestSkill(t, root)
+	workspace := filepath.Join(t.TempDir(), "workspace")
+	var logs bytes.Buffer
+
+	_, gatePassed, err := RunWithProvider(context.Background(), Config{
+		Root:      root,
+		Workspace: workspace,
+		Baseline:  true,
+		Target:    "target",
+		Judge:     "judge",
+		Skills:    []string{"demo-skill"},
+		EvalIDs:   []string{"case-a"},
+		MinPass:   0.9,
+		MinDelta:  0.2,
+		Logger:    structuredLogger(&logs),
+	}, &fakeProvider{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !gatePassed {
+		t.Fatal("expected gates to pass")
+	}
+
+	events := decodeJSONLogEvents(t, logs.String())
+	if len(events) != 2 {
+		t.Fatalf("expected run_started and one eval_completed event, got %#v", events)
+	}
+	if events[0]["event"] != "run_started" {
+		t.Fatalf("expected first event run_started, got %#v", events[0])
+	}
+	if events[1]["event"] != "eval_completed" {
+		t.Fatalf("expected second event eval_completed, got %#v", events[1])
+	}
+	if events[1]["skill"] != "demo-skill" || events[1]["eval_id"] != "case-a" {
+		t.Fatalf("unexpected eval event identity: %#v", events[1])
+	}
+	if events[1]["severity"] != "INFO" || events[1]["message"] != "skilpel eval completed" {
+		t.Fatalf("expected GCP-readable severity and message fields, got %#v", events[1])
+	}
+	for _, event := range events {
+		switch event["event"] {
+		case "run_started", "eval_completed":
+		default:
+			t.Fatalf("unexpected duplicate or unsupported log event: %#v", event)
+		}
+	}
+}
+
+func decodeJSONLogEvents(t *testing.T, logs string) []map[string]any {
+	t.Helper()
+	lines := strings.Split(strings.TrimSpace(logs), "\n")
+	events := make([]map[string]any, 0, len(lines))
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		var event map[string]any
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			t.Fatalf("log line is not JSON: %q: %v", line, err)
+		}
+		events = append(events, event)
+	}
+	return events
 }
 
 func TestRunWithProviderSkipsAutoDiscoveredSkillsWithoutEvalID(t *testing.T) {
