@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-24
+
 ### Added
 
 - Stream structured progress logs to stderr during eval runs while preserving the final summary JSON on stdout.
