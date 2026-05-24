@@ -25,7 +25,7 @@ func (r *repeated) Set(v string) error {
 }
 
 func Main(ctx context.Context, args []string, stdout, stderr io.Writer) (int, error) {
-	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
+	if wantsHelp(args) {
 		writeUsage(stdout)
 		return exitOK, nil
 	}
@@ -147,7 +147,94 @@ func parseRunArgs(args []string) (Config, error) {
 }
 
 func writeUsage(w io.Writer) {
-	fmt.Fprintln(w, `usage: skilpel run [options] [skill-relpath ...]
+	fmt.Fprintln(w, helpText)
+}
+
+func wantsHelp(args []string) bool {
+	if len(args) == 0 {
+		return true
+	}
+	if args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
+		return true
+	}
+	return false
+}
+
+const helpText = `skilpel evaluates Codex-style skills by running each eval with and without
+the skill, then judging whether the skill improved the result.
+
+Usage:
+  skilpel run [options] [skill-relpath ...]
+  skilpel help
+  skilpel --help
+
+Typical run:
+  OPENAI_API_KEY=... skilpel run \
+    --root ./skills \
+    --skill shell-script \
+    --eval-id new-script-strict-mode \
+    --workspace ./.skilpel \
+    --provider openai \
+    --target gpt-4o-mini \
+    --judge gpt-4o-mini \
+    --baseline \
+    --min-pass 0.90 \
+    --min-delta 0.20
+
+Config file:
+  skilpel run --config skilpel.yaml
+
+  root: ./skills
+  workspace: ./.skilpel
+  baseline: true
+  provider: openai
+  target: gpt-4o-mini
+  judge: gpt-4o-mini
+  minPass: 0.90
+  minDelta: 0.20
+
+Providers:
+  openai     OpenAI SDK, default OPENAI_API_KEY, https://api.openai.com/v1
+  xai        OpenAI-compatible, default XAI_API_KEY, https://api.x.ai/v1
+  qwen       OpenAI-compatible DashScope, default DASHSCOPE_API_KEY
+  anthropic  Anthropic SDK, default ANTHROPIC_API_KEY
+  claude     Alias for anthropic
+  gemini     Google GenAI SDK, default GEMINI_API_KEY
+
+Use --api-key-env to override the environment variable. Use --base-url to
+override OpenAI-compatible and Anthropic endpoints. Gemini uses the SDK's Gemini
+API backend and does not accept --base-url.
+
+Eval files:
+  skilpel looks beside each skill for evals/evals.yaml, then evals/evals.yml,
+  then evals/evals.json. YAML and JSON use the same structure.
+
+  skill_name: shell-script
+  evals:
+    - id: new-script-strict-mode
+      prompt: Write a Bash script that prints the current Git branch.
+      assertions:
+        - Starts with a Bash shebang.
+        - Enables strict mode with set -euo pipefail.
+
+Run modes:
+  with_skill     The skill body is sent as the system instruction.
+  without_skill  The same user prompt is sent without the skill when baseline
+                 is enabled.
+
+Gates:
+  --min-pass sets the minimum pass rate for with_skill results.
+  --min-delta sets the minimum pass-rate improvement over without_skill.
+  --no-baseline disables without_skill runs and baseline-delta gates.
+
+Artifacts:
+  The workspace receives summary.json plus per-skill and per-eval JSON artifacts
+  containing prompts, outputs, timing, grading, and gate details.
+
+Exit codes:
+  0  The run completed and all configured gates passed.
+  1  Evals ran, but assertions or gates failed.
+  2  Usage, configuration, filesystem, provider, or runtime failure.
 
 Options:
   --config <path>       YAML or JSON config path
@@ -163,5 +250,4 @@ Options:
   --base-url <url>      provider base URL override
   --api-key-env <name>  environment variable containing the API key
   --min-pass <rate>     minimum with_skill pass rate
-  --min-delta <rate>    minimum with_skill minus without_skill pass-rate delta`)
-}
+  --min-delta <rate>    minimum with_skill minus without_skill pass-rate delta`

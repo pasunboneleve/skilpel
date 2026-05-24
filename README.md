@@ -1,5 +1,7 @@
 # skilpel
 
+[![CI](https://github.com/pasunboneleve/skilpel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pasunboneleve/skilpel/actions/workflows/ci.yml?query=branch%3Amain)
+
 `skilpel` evaluates Codex-style skills by running the same prompt with and without the skill, then judging whether the skill improved the result.
 
 It is a focused Go evaluator for [agentskills.io](https://agentskills.io)-style repositories. The current version targets local skill development and CI gates: run one skill or one eval case, compare `with_skill` against `without_skill`, and fail clearly when a skill does not pass or improve enough over baseline.
@@ -83,6 +85,10 @@ go test ./...
 - `go run ./cmd/skilpel --help`
 - `go run ./cmd/skilpel run --help`
 - [Changelog](CHANGELOG.md)
+
+## License
+
+`skilpel` is released under the [MIT License](LICENSE).
 
 ## Status
 

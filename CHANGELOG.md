@@ -17,6 +17,9 @@ All notable changes to this project are documented here.
 - Add YAML eval file support with `evals/evals.yaml` and `evals/evals.yml` precedence before `evals/evals.json`.
 - Add GitHub Actions CI for Go formatting and tests.
 - Add provider plugins for OpenAI, xAI, Qwen, Anthropic/Claude, and Gemini using standard Go SDKs where available.
+- Add expanded CLI help for agents and no-argument runs.
+- Add MIT license metadata.
+- Add a README CI badge linked to the main-branch workflow runs.
 
 ### Fixed
 
