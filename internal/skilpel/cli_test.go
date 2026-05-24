@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/spf13/pflag"
 )
 
 func TestMainRejectsUnknownCommand(t *testing.T) {
@@ -20,23 +22,6 @@ func TestMainRejectsUnknownCommand(t *testing.T) {
 	}
 	if err == nil || !strings.Contains(err.Error(), "unknown command") {
 		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestMainRunHelpPrintsUsageAndExitsOK(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	code, err := Main(context.Background(), []string{"run", "--help"}, &stdout, &stderr)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if code != exitOK {
-		t.Fatalf("expected ok exit, got %d", code)
-	}
-	if !strings.Contains(stdout.String(), "skilpel run [options]") {
-		t.Fatalf("expected usage on stdout, got %q", stdout.String())
-	}
-	if stderr.Len() != 0 {
-		t.Fatalf("expected empty stderr, got %q", stderr.String())
 	}
 }
 
@@ -51,13 +36,11 @@ func TestMainNoArgsPrintsAgentHelpAndExitsOK(t *testing.T) {
 	}
 	help := stdout.String()
 	for _, want := range []string{
-		"Typical run:",
-		"Providers:",
-		"Eval files:",
-		"Gates:",
-		"Artifacts:",
-		"Logs:",
-		"Exit codes:",
+		"Usage:",
+		"Available Commands:",
+		"run",
+		"--output",
+		"--emit-annotations",
 	} {
 		if !strings.Contains(help, want) {
 			t.Fatalf("expected help to include %q, got %q", want, help)
@@ -77,8 +60,10 @@ func TestMainHelpSubcommandPrintsUsageAndExitsOK(t *testing.T) {
 	if code != exitOK {
 		t.Fatalf("expected ok exit, got %d", code)
 	}
-	if !strings.Contains(stdout.String(), "skilpel run [options]") {
-		t.Fatalf("expected command usage on stdout, got %q", stdout.String())
+	for _, want := range []string{"Available Commands:", "--output", "--emit-annotations"} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Fatalf("expected root usage to include %q, got %q", want, stdout.String())
+		}
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("expected empty stderr, got %q", stderr.String())
@@ -103,7 +88,7 @@ func TestMainVersionPrintsVersionAndExitsOK(t *testing.T) {
 }
 
 func TestParseRunArgsAppliesRepeatedFilters(t *testing.T) {
-	cfg, err := parseRunArgs([]string{
+	cfg, err := parseRunArgsForTest(t, []string{
 		"--root", "skills",
 		"--workspace", "work",
 		"--skill", "a",
@@ -138,6 +123,34 @@ func TestParseRunArgsAppliesRepeatedFilters(t *testing.T) {
 	}
 }
 
+func TestMainRunHelpPrintsAgentRunHelpAndExitsOK(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code, err := Main(context.Background(), []string{"run", "--help"}, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if code != exitOK {
+		t.Fatalf("expected ok exit, got %d", code)
+	}
+	for _, want := range []string{
+		"Typical run:",
+		"Providers:",
+		"Eval files:",
+		"Gates:",
+		"Artifacts:",
+		"Logs:",
+		"Output:",
+		"Exit codes:",
+	} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Fatalf("expected run help to include %q, got %q", want, stdout.String())
+		}
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected empty stderr, got %q", stderr.String())
+	}
+}
+
 func TestValidateConfigRejectsUnknownLogFormat(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.Judge = cfg.Target
@@ -157,6 +170,7 @@ func TestPrettyProgressLoggerWritesHumanReadableProgress(t *testing.T) {
 		"event", "run_started",
 		"skills", 2,
 		"evals", 3,
+		"root", "/tmp/skills",
 		"provider", "openai",
 		"target", "target-model",
 		"judge", "judge-model",
@@ -176,9 +190,13 @@ func TestPrettyProgressLoggerWritesHumanReadableProgress(t *testing.T) {
 
 	got := logs.String()
 	for _, want := range []string{
-		"skilpel: 2 skills, 3 evals",
+		"Validating skills: /tmp/skills",
+		"Configuration",
+		"ℹ 2 skills, 3 evals",
 		"provider=openai target=target-model judge=judge-model baseline=true",
-		"PASS [1/3] demo-skill | case-a | assertions=3/3 | with=100% baseline=33% delta=67%",
+		"Evals",
+		"✓ [1/3] demo-skill / case-a:",
+		"3 passed, 0 failed, with=100%, baseline=33%, delta=67%",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected pretty logs to include %q, got %q", want, got)
@@ -209,7 +227,7 @@ func TestPrettyProgressLoggerPreservesWithAttrs(t *testing.T) {
 		"with_skill_pass_rate", 1.0,
 	)
 
-	if got := logs.String(); !strings.Contains(got, "PASS [1/0] demo-skill | case-a") {
+	if got := logs.String(); !strings.Contains(got, "✓ [1/0] demo-skill / case-a:") {
 		t.Fatalf("expected With attrs in pretty log, got %q", got)
 	}
 }
@@ -229,6 +247,7 @@ func TestOpenProgressLoggerKeepsPrettyVisibleAndStructuredFile(t *testing.T) {
 		"event", "run_started",
 		"skills", 1,
 		"evals", 1,
+		"root", "/tmp/skills",
 		"provider", "openai",
 		"target", "target-model",
 		"judge", "judge-model",
@@ -236,7 +255,7 @@ func TestOpenProgressLoggerKeepsPrettyVisibleAndStructuredFile(t *testing.T) {
 	)
 	closeLogger()
 
-	if got := visible.String(); !strings.Contains(got, "skilpel: 1 skills, 1 evals") {
+	if got := visible.String(); !strings.Contains(got, "Validating skills: /tmp/skills") {
 		t.Fatalf("expected visible pretty log, got %q", got)
 	}
 
@@ -294,7 +313,7 @@ func TestParseRunArgsDoesNotOverrideConfigBaselineUnlessFlagIsSet(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	cfg, err := parseRunArgs([]string{"--config", configPath})
+	cfg, err := parseRunArgsForTest(t, []string{"--config", configPath})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,13 +321,23 @@ func TestParseRunArgsDoesNotOverrideConfigBaselineUnlessFlagIsSet(t *testing.T) 
 		t.Fatal("expected config baseline false to be preserved")
 	}
 
-	cfg, err = parseRunArgs([]string{"--config", configPath, "--baseline"})
+	cfg, err = parseRunArgsForTest(t, []string{"--config", configPath, "--baseline"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !cfg.Baseline {
 		t.Fatal("expected explicit --baseline to override config")
 	}
+}
+
+func parseRunArgsForTest(t *testing.T, args []string) (Config, error) {
+	t.Helper()
+	fs := pflag.NewFlagSet("skilpel run", pflag.ContinueOnError)
+	addConfigFlags(fs)
+	if err := fs.Parse(args); err != nil {
+		return Config{}, err
+	}
+	return configFromFlagSet(fs, fs.Args())
 }
 
 type failingWriter struct{}

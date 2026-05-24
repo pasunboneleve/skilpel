@@ -22,6 +22,7 @@ type Config struct {
 	JudgeParams  map[string]any `yaml:"judgeParams" json:"judgeParams"`
 	LogFormat    string         `yaml:"logFormat" json:"logFormat"`
 	LogFile      string         `yaml:"logFile" json:"logFile"`
+	Output       string         `yaml:"output" json:"output"`
 	Logger       *slog.Logger   `yaml:"-" json:"-"`
 }
 
@@ -102,6 +103,7 @@ type Summary struct {
 	Passed       int            `json:"passed"`
 	Failed       int            `json:"failed"`
 	Skills       []SkillSummary `json:"skills"`
+	Root         string         `json:"root"`
 	Workspace    string         `json:"workspace"`
 	Gates        GateSummary    `json:"gates"`
 	GateFailures []string       `json:"gate_failures,omitempty"`

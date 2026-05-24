@@ -20,6 +20,7 @@ func defaultConfig() Config {
 		MinPass:   0.90,
 		MinDelta:  0.20,
 		LogFormat: "auto",
+		Output:    "text",
 	}
 }
 
@@ -80,6 +81,11 @@ func validateConfig(cfg Config) error {
 	case "", "auto", "json", "pretty":
 	default:
 		return errors.New("log format must be auto, json, or pretty")
+	}
+	switch cfg.Output {
+	case "", "text", "json", "markdown":
+	default:
+		return errors.New("output format must be text, json, or markdown")
 	}
 	return nil
 }

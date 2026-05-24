@@ -5,6 +5,8 @@ go 1.26
 require (
 	github.com/anthropics/anthropic-sdk-go v1.45.0
 	github.com/openai/openai-go/v3 v3.37.0
+	github.com/spf13/cobra v1.10.2
+	github.com/spf13/pflag v1.0.9
 	google.golang.org/genai v1.58.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -20,6 +22,7 @@ require (
 	github.com/google/s2a-go v0.1.8 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.4 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/invopop/jsonschema v0.13.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/standard-webhooks/standard-webhooks/libraries v0.0.1 // indirect

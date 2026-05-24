@@ -46,6 +46,7 @@ func TestCompiledBinaryRunsShellScriptYAMLEvalFixture(t *testing.T) {
 		"--api-key-env", "SKILPEL_TEST_API_KEY",
 		"--min-pass", "1",
 		"--min-delta", "1",
+		"--output", "json",
 	)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -106,6 +107,7 @@ func TestCompiledBinaryRunsShellScriptOpenAICanary(t *testing.T) {
 		"--judge", "gpt-4o-mini",
 		"--min-pass", "1",
 		"--min-delta", "0",
+		"--output", "json",
 	)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

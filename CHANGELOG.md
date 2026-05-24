@@ -7,6 +7,12 @@ All notable changes to this project are documented here.
 ### Added
 
 - Add `--log-file` for keeping structured JSON progress logs in a file while showing human-readable progress in the terminal or CI logs.
+- Add skill-validator-style CLI flags `--output`/`-o` and `--emit-annotations`.
+
+### Changed
+
+- BREAKING: default `skilpel run` stdout is now a human-readable text report. Use `--output=json` for the previous machine-readable final summary.
+- Switch CLI parsing to Cobra/PFlag conventions to align help, version, shorthand flags, and command behavior with `skill-validator`.
 
 ## [0.2.0] - 2026-05-24
 

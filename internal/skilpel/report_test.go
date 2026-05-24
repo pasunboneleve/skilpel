@@ -1,0 +1,65 @@
+package skilpel
+
+import (
+	"bytes"
+	"strings"
+	"testing"
+)
+
+func TestPrintTextSummaryUsesSkillValidatorStyleSections(t *testing.T) {
+	summary := Summary{
+		Root:      "/tmp/skills",
+		Passed:    2,
+		Failed:    0,
+		Workspace: "/tmp/workspace",
+		Gates: GateSummary{
+			MinPass:  0.9,
+			MinDelta: 0.2,
+			Baseline: true,
+			Passed:   true,
+		},
+		Skills: []SkillSummary{
+			{
+				RelPath:          "shell-script",
+				Passed:           2,
+				Failed:           0,
+				WithSkillPass:    1,
+				WithoutSkillPass: 0.5,
+				Delta:            0.5,
+			},
+		},
+	}
+
+	var output bytes.Buffer
+	if err := writeSummary(&output, summary, "text"); err != nil {
+		t.Fatal(err)
+	}
+
+	got := output.String()
+	for _, want := range []string{
+		"Validating skills: /tmp/skills",
+		"Evals",
+		"✓ shell-script:",
+		"2 passed, 0 failed, with=100%, baseline=50%, delta=50%",
+		"Gates",
+		"✓ minimum pass rate:",
+		"Result: passed",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected text summary to include %q, got %q", want, got)
+		}
+	}
+}
+
+func TestWriteAnnotationsEscapesGateFailures(t *testing.T) {
+	summary := Summary{
+		GateFailures: []string{"skill failed 50%\nretry"},
+	}
+
+	var output bytes.Buffer
+	writeAnnotations(&output, summary)
+
+	if got, want := output.String(), "::error title=skilpel gate failed::skill failed 50%25%0Aretry\n"; got != want {
+		t.Fatalf("annotation = %q, want %q", got, want)
+	}
+}

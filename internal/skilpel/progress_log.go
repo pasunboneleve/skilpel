@@ -98,35 +98,63 @@ func (h *prettyProgressHandler) Handle(_ context.Context, record slog.Record) er
 		h.state.done = 0
 		_, err := fmt.Fprintf(
 			h.w,
-			"skilpel: %d skills, %d evals | provider=%s target=%s judge=%s baseline=%t\n",
+			"\n%sValidating skills: %s%s\n\n%sConfiguration%s\n  %sℹ %d skill%s, %d eval%s%s\n  %sℹ provider=%s target=%s judge=%s baseline=%t%s\n\n%sEvals%s\n",
+			colorBold,
+			attrString(attrs, "root"),
+			colorReset,
+			colorBold,
+			colorReset,
+			colorCyan,
 			attrInt(attrs, "skills"),
+			pluralS(attrInt(attrs, "skills")),
 			h.state.total,
+			pluralS(h.state.total),
+			colorReset,
+			colorCyan,
 			attrString(attrs, "provider"),
 			attrString(attrs, "target"),
 			attrString(attrs, "judge"),
 			attrBool(attrs, "baseline"),
+			colorReset,
+			colorBold,
+			colorReset,
 		)
 		return err
 	case "eval_completed":
 		h.state.done++
-		status := "PASS"
+		icon, color := levelIcon(true)
 		if attrInt(attrs, "failed") > 0 {
-			status = "FAIL"
+			icon, color = levelIcon(false)
 		}
 		_, err := fmt.Fprintf(
 			h.w,
-			"%s [%d/%d] %s | %s | assertions=%d/%d | with=%s baseline=%s delta=%s\n",
-			status,
+			"  %s%s [%d/%d] %s / %s:%s %d passed, %d failed, with=%s, baseline=%s, delta=%s\n",
+			color,
+			icon,
 			h.state.done,
 			h.state.total,
 			attrString(attrs, "rel_path"),
 			displayEval(attrs),
+			colorReset,
 			attrInt(attrs, "passed"),
-			attrInt(attrs, "total"),
+			attrInt(attrs, "failed"),
 			formatRate(attrFloat(attrs, "with_skill_pass_rate")),
 			formatOptionalRate(attrs, "without_skill_pass_rate"),
 			formatOptionalRate(attrs, "delta"),
 		)
+		return err
+	case "run_completed":
+		icon, color := levelIcon(attrBool(attrs, "gate_passed"))
+		result := "passed"
+		if !attrBool(attrs, "gate_passed") {
+			result = fmt.Sprintf("%d failed assertion%s, %d gate failure%s",
+				attrInt(attrs, "failed"),
+				pluralS(attrInt(attrs, "failed")),
+				attrInt(attrs, "gate_failures"),
+				pluralS(attrInt(attrs, "gate_failures")),
+			)
+		}
+		_, err := fmt.Fprintf(h.w, "\n%s%sResult: %s %s%s\n", colorBold, color, icon, result, colorReset)
 		return err
 	default:
 		_, err := fmt.Fprintf(h.w, "%s\n", record.Message)

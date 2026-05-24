@@ -44,6 +44,7 @@ func RunWithProvider(ctx context.Context, cfg Config, provider Provider) (Summar
 			slog.String("event", "run_started"),
 			slog.Int("skills", len(skills)),
 			slog.Int("evals", totalEvals),
+			slog.String("root", root),
 			slog.String("workspace", workspace),
 			slog.Bool("baseline", cfg.Baseline),
 			slog.Float64("min_pass", cfg.MinPass),
@@ -55,6 +56,7 @@ func RunWithProvider(ctx context.Context, cfg Config, provider Provider) (Summar
 	}
 
 	summary := Summary{
+		Root:      root,
 		Workspace: workspace,
 		StartedAt: started,
 		Gates:     GateSummary{MinPass: cfg.MinPass, MinDelta: cfg.MinDelta, Baseline: cfg.Baseline},

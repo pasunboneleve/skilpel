@@ -2,15 +2,15 @@ package skilpel
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 const (
@@ -19,150 +19,176 @@ const (
 	exitRuntime = 2
 )
 
-type repeated []string
-
-func (r *repeated) String() string { return strings.Join(*r, ",") }
-func (r *repeated) Set(v string) error {
-	*r = append(*r, v)
-	return nil
-}
-
 func Main(ctx context.Context, args []string, stdout, stderr io.Writer) (int, error) {
-	if wantsVersion(args) {
+	if len(args) == 1 && (args[0] == "version" || args[0] == "-v") {
 		fmt.Fprintf(stdout, "skilpel %s\n", Version())
 		return exitOK, nil
 	}
-	if wantsHelp(args) {
-		writeUsage(stdout)
-		return exitOK, nil
-	}
-	if args[0] != "run" {
-		writeUsage(stderr)
-		return exitRuntime, fmt.Errorf("unknown command %q", args[0])
-	}
 
-	cfg, err := parseRunArgs(args[1:])
-	if err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			writeUsage(stdout)
-			return exitOK, nil
-		}
-		return exitRuntime, err
-	}
-	if err := validateConfig(cfg); err != nil {
-		return exitRuntime, err
-	}
-	logger, closeLogger, err := openProgressLogger(stderr, cfg)
-	if err != nil {
-		return exitRuntime, err
-	}
-	defer closeLogger()
-	cfg.Logger = logger
+	var outputFormat string
+	var emitAnnotations bool
+	exitCode := exitOK
 
-	summary, gatePassed, err := Run(ctx, cfg)
-	if err != nil {
+	rootCmd := &cobra.Command{
+		Use:           "skilpel",
+		Short:         "Evaluate Codex-style skills",
+		Long:          "skilpel evaluates Codex-style skills by running evals with and without the skill, then judging whether the skill improved the result.",
+		Version:       Version(),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmd.Help()
+		},
+	}
+	rootCmd.SetVersionTemplate("skilpel {{.Version}}\n")
+	rootCmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", "text", "output format: text, json, or markdown")
+	rootCmd.PersistentFlags().BoolVar(&emitAnnotations, "emit-annotations", false, "emit GitHub Actions workflow command annotations (::error) alongside normal output")
+
+	runCmd := &cobra.Command{
+		Use:   "run [skill-relpath ...]",
+		Short: "Run skill evals",
+		Long:  runHelpText(),
+		RunE: func(cmd *cobra.Command, skillArgs []string) error {
+			cfg, err := configFromRunCommand(cmd, skillArgs)
+			if err != nil {
+				return err
+			}
+			if cmd.Root().PersistentFlags().Changed("output") {
+				cfg.Output = outputFormat
+			}
+			if err := validateConfig(cfg); err != nil {
+				return err
+			}
+			logger, closeLogger, err := openProgressLogger(stderr, cfg)
+			if err != nil {
+				return err
+			}
+			defer closeLogger()
+			cfg.Logger = logger
+
+			summary, gatePassed, err := Run(ctx, cfg)
+			if err != nil {
+				return err
+			}
+			cfg.Logger.InfoContext(ctx, "skilpel run completed",
+				slog.String("event", "run_completed"),
+				slog.Int("passed", summary.Passed),
+				slog.Int("failed", summary.Failed),
+				slog.Bool("gate_passed", gatePassed),
+				slog.Int("gate_failures", len(summary.GateFailures)),
+			)
+			if emitAnnotations {
+				writeAnnotations(stderr, summary)
+			}
+			if err := writeSummary(stdout, summary, cfg.Output); err != nil {
+				return err
+			}
+			if !gatePassed {
+				exitCode = exitGate
+			}
+			return nil
+		},
+	}
+	addRunFlags(runCmd)
+	rootCmd.AddCommand(runCmd)
+
+	rootCmd.SetArgs(args)
+	rootCmd.SetOut(stdout)
+	rootCmd.SetErr(stderr)
+	if err := rootCmd.Execute(); err != nil {
 		return exitRuntime, err
 	}
-
-	enc := json.NewEncoder(stdout)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(summary); err != nil {
-		return exitRuntime, fmt.Errorf("write summary: %w", err)
-	}
-	if !gatePassed {
-		return exitGate, nil
-	}
-	return exitOK, nil
+	return exitCode, nil
 }
 
-func parseRunArgs(args []string) (Config, error) {
-	var configPath string
-	var skills repeated
-	var evalIDs repeated
+func addRunFlags(cmd *cobra.Command) {
+	addConfigFlags(cmd.Flags())
+}
 
-	fs := flag.NewFlagSet("skilpel run", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	fs.StringVar(&configPath, "config", "", "YAML or JSON config path")
-	fs.StringVar(&configPath, "c", "", "YAML or JSON config path")
-	root := fs.String("root", "", "skills root directory")
-	workspace := fs.String("workspace", "", "workspace for JSON artifacts")
-	baseline := fs.Bool("baseline", false, "run without_skill baseline")
-	noBaseline := fs.Bool("no-baseline", false, "disable without_skill baseline")
-	provider := fs.String("provider", "", "provider plugin: "+providerNamesText())
-	target := fs.String("target", "", "target model")
-	judge := fs.String("judge", "", "judge model")
-	baseURL := fs.String("base-url", "", "provider base URL override")
-	apiKeyEnv := fs.String("api-key-env", "", "environment variable containing the API key")
-	minPass := fs.Float64("min-pass", -1, "minimum with_skill pass rate")
-	minDelta := fs.Float64("min-delta", -1, "minimum with_skill minus without_skill pass-rate delta")
-	logFormat := fs.String("log-format", "", "progress log format: auto, json, or pretty")
-	logFile := fs.String("log-file", "", "write structured JSON progress logs to this file")
-	fs.Var(&skills, "skill", "skill relpath to include; repeatable")
-	fs.Var(&evalIDs, "eval-id", "eval id to include; repeatable")
+func addConfigFlags(fs *pflag.FlagSet) {
+	fs.StringP("config", "c", "", "YAML or JSON config path")
+	fs.String("root", "", "skills root directory")
+	fs.String("workspace", "", "workspace for JSON artifacts")
+	fs.Bool("baseline", false, "run without_skill baseline")
+	fs.Bool("no-baseline", false, "disable without_skill baseline")
+	fs.String("provider", "", "provider plugin: "+providerNamesText())
+	fs.String("target", "", "target model")
+	fs.String("judge", "", "judge model")
+	fs.String("base-url", "", "provider base URL override")
+	fs.String("api-key-env", "", "environment variable containing the API key")
+	fs.Float64("min-pass", -1, "minimum with_skill pass rate")
+	fs.Float64("min-delta", -1, "minimum with_skill minus without_skill pass-rate delta")
+	fs.String("log-format", "", "progress log format: auto, json, or pretty")
+	fs.String("log-file", "", "write structured JSON progress logs to this file")
+	fs.StringArray("skill", nil, "skill relpath to include; repeatable")
+	fs.StringArray("eval-id", nil, "eval id to include; repeatable")
+}
 
-	if err := fs.Parse(args); err != nil {
+func configFromRunCommand(cmd *cobra.Command, skillArgs []string) (Config, error) {
+	return configFromFlagSet(cmd.Flags(), skillArgs)
+}
+
+func configFromFlagSet(fs *pflag.FlagSet, skillArgs []string) (Config, error) {
+	configPath, err := fs.GetString("config")
+	if err != nil {
 		return Config{}, err
 	}
-	setFlags := map[string]bool{}
-	fs.Visit(func(f *flag.Flag) {
-		setFlags[f.Name] = true
-	})
-
 	cfg, err := loadConfig(configPath)
 	if err != nil {
 		return Config{}, err
 	}
 
-	if *root != "" {
-		cfg.Root = *root
+	if value, _ := fs.GetString("root"); value != "" {
+		cfg.Root = value
 	}
-	if *workspace != "" {
-		cfg.Workspace = *workspace
+	if value, _ := fs.GetString("workspace"); value != "" {
+		cfg.Workspace = value
 	}
-	if setFlags["baseline"] {
-		cfg.Baseline = *baseline
+	if fs.Changed("baseline") {
+		value, _ := fs.GetBool("baseline")
+		cfg.Baseline = value
 	}
-	if setFlags["no-baseline"] && *noBaseline {
+	if value, _ := fs.GetBool("no-baseline"); fs.Changed("no-baseline") && value {
 		cfg.Baseline = false
 	}
-	if *provider != "" {
-		cfg.Provider = *provider
+	if value, _ := fs.GetString("provider"); value != "" {
+		cfg.Provider = value
 	}
-	if *target != "" {
-		cfg.Target = *target
+	if value, _ := fs.GetString("target"); value != "" {
+		cfg.Target = value
 	}
-	if *judge != "" {
-		cfg.Judge = *judge
+	if value, _ := fs.GetString("judge"); value != "" {
+		cfg.Judge = value
 	}
-	if *baseURL != "" {
-		cfg.BaseURL = *baseURL
+	if value, _ := fs.GetString("base-url"); value != "" {
+		cfg.BaseURL = value
 	}
-	if *apiKeyEnv != "" {
-		cfg.APIKeyEnv = *apiKeyEnv
+	if value, _ := fs.GetString("api-key-env"); value != "" {
+		cfg.APIKeyEnv = value
 	}
-	if *minPass >= 0 {
-		cfg.MinPass = *minPass
+	if value, _ := fs.GetFloat64("min-pass"); value >= 0 {
+		cfg.MinPass = value
 	}
-	if *minDelta >= 0 {
-		cfg.MinDelta = *minDelta
+	if value, _ := fs.GetFloat64("min-delta"); value >= 0 {
+		cfg.MinDelta = value
 	}
-	if *logFormat != "" {
-		cfg.LogFormat = *logFormat
+	if value, _ := fs.GetString("log-format"); value != "" {
+		cfg.LogFormat = value
 	}
-	if *logFile != "" {
-		cfg.LogFile = *logFile
+	if value, _ := fs.GetString("log-file"); value != "" {
+		cfg.LogFile = value
 	}
-	if len(skills) > 0 {
-		cfg.Skills = skills
+	if values, _ := fs.GetStringArray("skill"); len(values) > 0 {
+		cfg.Skills = values
 	}
-	if len(evalIDs) > 0 {
-		cfg.EvalIDs = evalIDs
+	if values, _ := fs.GetStringArray("eval-id"); len(values) > 0 {
+		cfg.EvalIDs = values
+	}
+	if len(skillArgs) > 0 {
+		cfg.Skills = append(cfg.Skills, skillArgs...)
 	}
 	if cfg.Judge == "" {
 		cfg.Judge = cfg.Target
-	}
-	if extra := fs.Args(); len(extra) > 0 {
-		cfg.Skills = append(cfg.Skills, extra...)
 	}
 	return cfg, nil
 }
@@ -198,23 +224,14 @@ func writeUsage(w io.Writer) {
 		defaultProviderName,
 		providerHelpText(),
 		providersSupportingBaseURLText(),
-		providerNamesText(),
 	)
 	fmt.Fprintln(w)
 }
 
-func wantsHelp(args []string) bool {
-	if len(args) == 0 {
-		return true
-	}
-	if args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
-		return true
-	}
-	return false
-}
-
-func wantsVersion(args []string) bool {
-	return len(args) == 1 && (args[0] == "version" || args[0] == "--version" || args[0] == "-v")
+func runHelpText() string {
+	var b strings.Builder
+	writeUsage(&b)
+	return b.String()
 }
 
 const helpTemplate = `skilpel evaluates Codex-style skills by running each eval with and without
@@ -290,28 +307,14 @@ Logs:
   GCP-readable JSON lines, --log-format=pretty for terminal progress, or
   --log-format=auto to choose pretty only when stderr is an interactive
   terminal. Use --log-file to also write structured JSON progress logs to a file
-  without printing those JSON lines in the terminal or CI step log. The final
-  summary remains JSON on stdout for scripts and CI artifacts.
+  without printing those JSON lines in the terminal or CI step log.
+
+Output:
+  The default --output=text follows skill-validator's human-readable terminal
+  report style. Use --output=json for scripts and CI artifacts, or
+  --output=markdown for Markdown release notes and issue comments.
 
 Exit codes:
   0  The run completed and all configured gates passed.
   1  Evals ran, but assertions or gates failed.
-  2  Usage, configuration, filesystem, provider, or runtime failure.
-
-Options:
-  --config <path>       YAML or JSON config path
-  --root <path>         skills root directory
-  --workspace <path>    workspace for JSON artifacts
-  --skill <relpath>     skill relpath to include; repeatable
-  --eval-id <id>        eval id to include; repeatable
-  --baseline            run without_skill baseline (default true)
-  --no-baseline         disable baseline
-  --provider <name>     provider: %s
-  --target <model>      target model
-  --judge <model>       judge model
-  --base-url <url>      provider base URL override
-  --api-key-env <name>  environment variable containing the API key
-  --min-pass <rate>     minimum with_skill pass rate
-  --min-delta <rate>    minimum with_skill minus without_skill pass-rate delta
-  --log-format <format> progress logs: auto, json, or pretty
-  --log-file <path>     also write structured JSON progress logs to a file`
+  2  Usage, configuration, filesystem, provider, or runtime failure.`
