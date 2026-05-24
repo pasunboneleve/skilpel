@@ -20,7 +20,9 @@ All notable changes to this project are documented here.
 - Print usage and exit successfully for `skilpel run --help`.
 - Skip auto-discovered skills that do not match a workspace-wide `--eval-id` filter.
 - Extract fenced judge JSON even when the model includes preamble text.
+- Match reordered judge results back to assertions by assertion text.
 - Preserve HTTP status context for non-JSON provider error responses.
+- Avoid artifact slug collisions for named eval cases that lack IDs.
 - Treat malformed judge JSON as failed assertions with diagnostic evidence.
 
 ### Documentation

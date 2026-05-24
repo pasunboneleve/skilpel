@@ -8,7 +8,13 @@ import (
 	"strings"
 )
 
-var fencedJSONRE = regexp.MustCompile("(?is)```(?:json)?\\s*(.*?)\\s*```")
+var fencedJSONRE = regexp.MustCompile("(?is)```json\\s*(.*?)\\s*```")
+
+type judgeAssertionResult struct {
+	Text     string `json:"text"`
+	Passed   bool   `json:"passed"`
+	Evidence string `json:"evidence"`
+}
 
 func grade(ctx context.Context, provider Provider, model string, eval EvalCase, output string, params map[string]any) (Grading, string, error) {
 	prompt := judgePrompt(eval, output)
@@ -39,14 +45,27 @@ func parseGrading(output string, assertions []string) (Grading, error) {
 	if len(raw.AssertionResults) == 0 || string(raw.AssertionResults) == "null" {
 		return Grading{}, fmt.Errorf("grading response missing assertion_results")
 	}
-	var rawResults []json.RawMessage
-	if err := json.Unmarshal(raw.AssertionResults, &rawResults); err != nil {
+	var rawMessages []json.RawMessage
+	if err := json.Unmarshal(raw.AssertionResults, &rawMessages); err != nil {
 		return Grading{}, err
 	}
 
+	rawResults := make([]judgeAssertionResult, len(rawMessages))
+	validResults := make([]bool, len(rawMessages))
+	for i, rawMessage := range rawMessages {
+		if err := json.Unmarshal(rawMessage, &rawResults[i]); err == nil {
+			validResults[i] = true
+		}
+	}
+
 	results := make([]AssertionResult, 0, len(assertions))
+	usedResults := make([]bool, len(rawResults))
 	for i, assertion := range assertions {
-		if i >= len(rawResults) {
+		resultIndex := matchingJudgeResult(assertion, rawResults, validResults, usedResults)
+		if resultIndex < 0 && i < len(rawResults) && validResults[i] && !usedResults[i] {
+			resultIndex = i
+		}
+		if resultIndex < 0 {
 			results = append(results, AssertionResult{
 				Text:     assertion,
 				Passed:   false,
@@ -54,18 +73,8 @@ func parseGrading(output string, assertions []string) (Grading, error) {
 			})
 			continue
 		}
-		var rawResult struct {
-			Passed   bool   `json:"passed"`
-			Evidence string `json:"evidence"`
-		}
-		if err := json.Unmarshal(rawResults[i], &rawResult); err != nil {
-			results = append(results, AssertionResult{
-				Text:     assertion,
-				Passed:   false,
-				Evidence: "judge omitted this assertion result",
-			})
-			continue
-		}
+		usedResults[resultIndex] = true
+		rawResult := rawResults[resultIndex]
 		evidence := strings.TrimSpace(rawResult.Evidence)
 		if evidence == "" {
 			evidence = "judge did not provide concrete evidence"
@@ -79,9 +88,21 @@ func parseGrading(output string, assertions []string) (Grading, error) {
 	return Grading{AssertionResults: results}, nil
 }
 
+func matchingJudgeResult(assertion string, results []judgeAssertionResult, valid, used []bool) int {
+	want := strings.TrimSpace(assertion)
+	for i, result := range results {
+		if valid[i] && !used[i] && strings.TrimSpace(result.Text) == want {
+			return i
+		}
+	}
+	return -1
+}
+
 func cleanJudgeJSON(output string) string {
 	trimmed := strings.TrimSpace(output)
-	if match := fencedJSONRE.FindStringSubmatch(trimmed); len(match) == 2 {
+	matches := fencedJSONRE.FindAllStringSubmatch(trimmed, -1)
+	if len(matches) > 0 {
+		match := matches[len(matches)-1]
 		return strings.TrimSpace(match[1])
 	}
 	return trimmed

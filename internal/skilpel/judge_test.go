@@ -32,6 +32,26 @@ func TestParseGradingNormalizesStrictAssertionArray(t *testing.T) {
 	}
 }
 
+func TestParseGradingMatchesReorderedResultsByText(t *testing.T) {
+	grading, err := parseGrading(`{
+  "assertion_results": [
+    {"text": "second assertion", "passed": false, "evidence": "second evidence"},
+    {"text": "first assertion", "passed": true, "evidence": "first evidence"}
+  ]
+}`, []string{"first assertion", "second assertion"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	normalizeGrading(&grading)
+	if grading.AssertionResults[0].Text != "first assertion" || !grading.AssertionResults[0].Passed || grading.AssertionResults[0].Evidence != "first evidence" {
+		t.Fatalf("unexpected first assertion result: %#v", grading.AssertionResults[0])
+	}
+	if grading.AssertionResults[1].Text != "second assertion" || grading.AssertionResults[1].Passed || grading.AssertionResults[1].Evidence != "second evidence" {
+		t.Fatalf("unexpected second assertion result: %#v", grading.AssertionResults[1])
+	}
+}
+
 func TestParseGradingRejectsNonArrayAssertionResults(t *testing.T) {
 	_, err := parseGrading(`{
   "assertion_results": {"first": true},
@@ -44,6 +64,13 @@ func TestParseGradingRejectsNonArrayAssertionResults(t *testing.T) {
 
 func TestCleanJudgeJSONExtractsFencedJSONAfterPreamble(t *testing.T) {
 	got := cleanJudgeJSON("Here is the grading:\n\n```json\n{\"assertion_results\":[]}\n```")
+	if got != `{"assertion_results":[]}` {
+		t.Fatalf("unexpected cleaned JSON: %q", got)
+	}
+}
+
+func TestCleanJudgeJSONIgnoresEarlierNonJSONFence(t *testing.T) {
+	got := cleanJudgeJSON("notes:\n```text\nnot json\n```\nresult:\n```json\n{\"assertion_results\":[]}\n```")
 	if got != `{"assertion_results":[]}` {
 		t.Fatalf("unexpected cleaned JSON: %q", got)
 	}
