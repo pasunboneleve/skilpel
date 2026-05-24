@@ -57,12 +57,11 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Check OpenAI canary secret
+      - name: Gate and run OpenAI shell-script canary
         run: |
           if [ -z "$OPENAI_API_KEY" ]; then
             echo "::warning title=OpenAI canary skipped::OPENAI_API_KEY secret is not configured; the real shell-script canary did not run."
+            exit 0
           fi
 
-      - name: Run OpenAI shell-script canary
-        if: env.OPENAI_API_KEY != ''
-        run: go test ./internal/skilpel -run TestCompiledBinaryRunsShellScriptOpenAICanary -count=1
+          go test ./internal/skilpel -run TestCompiledBinaryRunsShellScriptOpenAICanary -count=1
