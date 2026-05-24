@@ -1,6 +1,7 @@
 package skilpel
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 )
@@ -23,13 +24,19 @@ func slugify(value, fallback string) string {
 
 func evalSlug(eval EvalCase, index int) string {
 	source := eval.Name
+	needsIndex := eval.ID == ""
 	if source == "" && eval.ID != "" {
 		source = "eval-" + eval.ID
+		needsIndex = false
 	}
 	if source == "" {
-		source = "eval"
+		source = fmt.Sprintf("eval-%d", index+1)
+		needsIndex = false
 	}
 	slug := slugify(source, "eval")
+	if needsIndex {
+		slug = fmt.Sprintf("%s-%d", slug, index+1)
+	}
 	if !strings.HasPrefix(slug, "eval-") {
 		slug = "eval-" + slug
 	}

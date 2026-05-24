@@ -1,4 +1,5 @@
 .kata.local.toml
+/.env
 /skilpel
 /dist/
 /coverage.out

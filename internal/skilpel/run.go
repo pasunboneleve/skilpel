@@ -9,7 +9,7 @@ import (
 )
 
 func Run(ctx context.Context, cfg Config) (Summary, bool, error) {
-	provider, err := newOpenAIProvider(cfg)
+	provider, err := newProvider(cfg)
 	if err != nil {
 		return Summary{}, false, err
 	}

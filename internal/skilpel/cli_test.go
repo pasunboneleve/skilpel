@@ -20,6 +20,84 @@ func TestMainRejectsUnknownCommand(t *testing.T) {
 	}
 }
 
+func TestMainRunHelpPrintsUsageAndExitsOK(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code, err := Main(context.Background(), []string{"run", "--help"}, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if code != exitOK {
+		t.Fatalf("expected ok exit, got %d", code)
+	}
+	if !strings.Contains(stdout.String(), "skilpel run [options]") {
+		t.Fatalf("expected usage on stdout, got %q", stdout.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected empty stderr, got %q", stderr.String())
+	}
+}
+
+func TestMainNoArgsPrintsAgentHelpAndExitsOK(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code, err := Main(context.Background(), nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if code != exitOK {
+		t.Fatalf("expected ok exit, got %d", code)
+	}
+	help := stdout.String()
+	for _, want := range []string{
+		"Typical run:",
+		"Providers:",
+		"Eval files:",
+		"Gates:",
+		"Artifacts:",
+		"Exit codes:",
+	} {
+		if !strings.Contains(help, want) {
+			t.Fatalf("expected help to include %q, got %q", want, help)
+		}
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected empty stderr, got %q", stderr.String())
+	}
+}
+
+func TestMainHelpSubcommandPrintsUsageAndExitsOK(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code, err := Main(context.Background(), []string{"help"}, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if code != exitOK {
+		t.Fatalf("expected ok exit, got %d", code)
+	}
+	if !strings.Contains(stdout.String(), "skilpel run [options]") {
+		t.Fatalf("expected command usage on stdout, got %q", stdout.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected empty stderr, got %q", stderr.String())
+	}
+}
+
+func TestMainVersionPrintsVersionAndExitsOK(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code, err := Main(context.Background(), []string{"version"}, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if code != exitOK {
+		t.Fatalf("expected ok exit, got %d", code)
+	}
+	if got := strings.TrimSpace(stdout.String()); got != "skilpel "+Version() {
+		t.Fatalf("version output = %q, want skilpel %s", got, Version())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected empty stderr, got %q", stderr.String())
+	}
+}
+
 func TestParseRunArgsAppliesRepeatedFilters(t *testing.T) {
 	cfg, err := parseRunArgs([]string{
 		"--root", "skills",

@@ -4,8 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 )
+
+var fencedJSONRE = regexp.MustCompile("(?is)```json\\s*(.*?)\\s*```")
+
+type judgeAssertionResult struct {
+	Text     string `json:"text"`
+	Passed   bool   `json:"passed"`
+	Evidence string `json:"evidence"`
+}
 
 func grade(ctx context.Context, provider Provider, model string, eval EvalCase, output string, params map[string]any) (Grading, string, error) {
 	prompt := judgePrompt(eval, output)
@@ -18,38 +27,130 @@ func grade(ctx context.Context, provider Provider, model string, eval EvalCase, 
 		return Grading{}, prompt, err
 	}
 
-	var grading Grading
-	if err := json.Unmarshal([]byte(cleanJudgeJSON(result.Output)), &grading); err != nil {
-		return Grading{}, prompt, fmt.Errorf("judge returned invalid JSON: %w", err)
+	grading, err := parseGrading(cleanJudgeJSON(result.Output), eval.Assertions)
+	if err != nil {
+		grading = failClosedGrading(eval.Assertions, result.Output, err)
 	}
 	normalizeGrading(&grading)
 	return grading, prompt, nil
 }
 
+func parseGrading(output string, assertions []string) (Grading, error) {
+	var raw struct {
+		AssertionResults json.RawMessage `json:"assertion_results"`
+	}
+	if err := json.Unmarshal([]byte(output), &raw); err != nil {
+		return Grading{}, err
+	}
+	if len(raw.AssertionResults) == 0 || string(raw.AssertionResults) == "null" {
+		return Grading{}, fmt.Errorf("grading response missing assertion_results")
+	}
+	var rawMessages []json.RawMessage
+	if err := json.Unmarshal(raw.AssertionResults, &rawMessages); err != nil {
+		return Grading{}, err
+	}
+
+	rawResults := make([]judgeAssertionResult, len(rawMessages))
+	validResults := make([]bool, len(rawMessages))
+	for i, rawMessage := range rawMessages {
+		if err := json.Unmarshal(rawMessage, &rawResults[i]); err == nil {
+			validResults[i] = true
+		}
+	}
+
+	results := make([]AssertionResult, 0, len(assertions))
+	usedResults := make([]bool, len(rawResults))
+	for i, assertion := range assertions {
+		resultIndex := matchingJudgeResult(assertion, rawResults, validResults, usedResults)
+		if resultIndex < 0 && i < len(rawResults) && validResults[i] && !usedResults[i] {
+			resultIndex = i
+		}
+		if resultIndex < 0 {
+			results = append(results, AssertionResult{
+				Text:     assertion,
+				Passed:   false,
+				Evidence: "judge omitted this assertion result",
+			})
+			continue
+		}
+		usedResults[resultIndex] = true
+		rawResult := rawResults[resultIndex]
+		evidence := strings.TrimSpace(rawResult.Evidence)
+		if evidence == "" {
+			evidence = "judge did not provide concrete evidence"
+		}
+		results = append(results, AssertionResult{
+			Text:     assertion,
+			Passed:   rawResult.Passed,
+			Evidence: evidence,
+		})
+	}
+	return Grading{AssertionResults: results}, nil
+}
+
+func matchingJudgeResult(assertion string, results []judgeAssertionResult, valid, used []bool) int {
+	want := strings.TrimSpace(assertion)
+	for i, result := range results {
+		if valid[i] && !used[i] && strings.TrimSpace(result.Text) == want {
+			return i
+		}
+	}
+	return -1
+}
+
 func cleanJudgeJSON(output string) string {
 	trimmed := strings.TrimSpace(output)
-	if !strings.HasPrefix(trimmed, "```") {
-		return trimmed
+	matches := fencedJSONRE.FindAllStringSubmatch(trimmed, -1)
+	if len(matches) > 0 {
+		match := matches[len(matches)-1]
+		return strings.TrimSpace(match[1])
 	}
-	trimmed = strings.TrimPrefix(trimmed, "```")
-	trimmed = strings.TrimSpace(trimmed)
-	trimmed = strings.TrimPrefix(trimmed, "json")
-	trimmed = strings.TrimSpace(trimmed)
-	trimmed = strings.TrimSuffix(trimmed, "```")
-	return strings.TrimSpace(trimmed)
+	return trimmed
+}
+
+func failClosedGrading(assertions []string, output string, cause error) Grading {
+	evidence := fmt.Sprintf("judge returned unparseable response: %s; error: %v", truncate(output, 500), cause)
+	results := make([]AssertionResult, 0, len(assertions))
+	for _, assertion := range assertions {
+		results = append(results, AssertionResult{Text: assertion, Passed: false, Evidence: evidence})
+	}
+	return Grading{AssertionResults: results}
+}
+
+func truncate(value string, max int) string {
+	runes := []rune(value)
+	if len(runes) <= max {
+		return value
+	}
+	return string(runes[:max]) + "..."
 }
 
 func judgePrompt(eval EvalCase, output string) string {
-	var b strings.Builder
-	b.WriteString("You are a strict JSON-only evaluator.\n")
-	b.WriteString("Return only JSON with assertion_results and summary.\n\n")
-	b.WriteString("Model output:\n")
-	b.WriteString(output)
-	b.WriteString("\n\nAssertions:\n")
-	for i, assertion := range eval.Assertions {
-		fmt.Fprintf(&b, "%d. %s\n", i+1, assertion)
+	assertions, err := json.MarshalIndent(eval.Assertions, "", "  ")
+	if err != nil {
+		assertions = []byte("[]")
 	}
-	return b.String()
+	return fmt.Sprintf(`You are grading an agentskills.io evaluation run.
+
+Grading principles:
+- Require concrete evidence for every PASS; quote or reference the output.
+- Do not give the benefit of the doubt.
+- PASS an assertion only if every condition in the assertion text holds.
+- A label without substance is a FAIL.
+
+Return only JSON. Use STRICT JSON only. No markdown. Shape:
+{"assertion_results":[{"text":"...","passed":true,"evidence":"..."}],"summary":{"passed":0,"failed":0,"total":0,"pass_rate":0}}
+
+Rules:
+- Include every assertion exactly once and copy the full assertion text verbatim into text.
+- Use short concrete evidence: quote, snippet, or file reference.
+- Summary may be included, but it will be recomputed by the caller.
+
+Assertions:
+%s
+
+Model output:
+%s`, string(assertions), output)
 }
 
 func normalizeGrading(grading *Grading) {

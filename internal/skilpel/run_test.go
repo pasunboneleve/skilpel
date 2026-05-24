@@ -3,6 +3,7 @@ package skilpel
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -93,6 +94,59 @@ func writeTestSkill(t *testing.T, root string) {
 	}
 }
 
+func writeTestSkillWithEval(t *testing.T, root, name, evalID string) {
+	t.Helper()
+	dir := filepath.Join(root, name)
+	if err := os.MkdirAll(filepath.Join(dir, "evals"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	skill := fmt.Sprintf(`---
+name: %s
+description: Test skill.
+---
+
+Use the skill.
+`, name)
+	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(skill), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	evals := fmt.Sprintf(`{
+  "skill_name": "%s",
+  "evals": [
+    {
+      "id": "%s",
+      "name": "%s",
+      "prompt": "Run %s.",
+      "assertions": ["passes"]
+    }
+  ]
+}`, name, evalID, evalID, evalID)
+	if err := os.WriteFile(filepath.Join(dir, "evals", "evals.json"), []byte(evals), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func writeTestSkillFile(t *testing.T, root, name, evalFile, evals string) {
+	t.Helper()
+	dir := filepath.Join(root, name)
+	if err := os.MkdirAll(filepath.Join(dir, "evals"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	skill := fmt.Sprintf(`---
+name: %s
+description: Test skill.
+---
+
+Use the skill.
+`, name)
+	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(skill), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "evals", evalFile), []byte(evals), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRunWithProviderFiltersEvalAndWritesArtifacts(t *testing.T) {
 	root := t.TempDir()
 	writeTestSkill(t, root)
@@ -105,8 +159,6 @@ func TestRunWithProviderFiltersEvalAndWritesArtifacts(t *testing.T) {
 		Baseline:  true,
 		Target:    "target",
 		Judge:     "judge",
-		BaseURL:   "http://example.test/v1",
-		APIKeyEnv: "OPENAI_API_KEY",
 		Skills:    []string{"demo-skill"},
 		EvalIDs:   []string{"2"},
 		MinPass:   0.9,
@@ -138,6 +190,155 @@ func TestRunWithProviderFiltersEvalAndWritesArtifacts(t *testing.T) {
 	}
 }
 
+func TestRunWithProviderSkipsAutoDiscoveredSkillsWithoutEvalID(t *testing.T) {
+	root := t.TempDir()
+	writeTestSkillWithEval(t, root, "match-skill", "target-case")
+	writeTestSkillWithEval(t, root, "other-skill", "other-case")
+
+	summary, gatePassed, err := RunWithProvider(context.Background(), Config{
+		Root:      root,
+		Workspace: filepath.Join(t.TempDir(), "workspace"),
+		Baseline:  true,
+		Target:    "target",
+		Judge:     "judge",
+		EvalIDs:   []string{"target-case"},
+		MinPass:   0.9,
+		MinDelta:  0.2,
+	}, &fakeProvider{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !gatePassed {
+		t.Fatalf("expected gates to pass: %#v", summary.GateFailures)
+	}
+	if len(summary.Skills) != 1 || summary.Skills[0].RelPath != "match-skill" {
+		t.Fatalf("expected only matching skill, got %#v", summary.Skills)
+	}
+}
+
+func TestRunWithProviderLoadsYAMLEvals(t *testing.T) {
+	root := t.TempDir()
+	writeTestSkillFile(t, root, "yaml-skill", "evals.yaml", `skill_name: yaml-skill
+evals:
+  - id: yaml-case
+    name: yaml case
+    prompt: Run the YAML case.
+    assertions:
+      - text: reports YAML assertion objects
+`)
+
+	summary, gatePassed, err := RunWithProvider(context.Background(), Config{
+		Root:      root,
+		Workspace: filepath.Join(t.TempDir(), "workspace"),
+		Baseline:  true,
+		Target:    "target",
+		Judge:     "judge",
+		Skills:    []string{"yaml-skill"},
+		EvalIDs:   []string{"yaml-case"},
+		MinPass:   0.9,
+		MinDelta:  0.2,
+	}, &fakeProvider{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !gatePassed {
+		t.Fatalf("expected gates to pass: %#v", summary.GateFailures)
+	}
+	if len(summary.Skills) != 1 || summary.Skills[0].RelPath != "yaml-skill" {
+		t.Fatalf("expected YAML skill to run, got %#v", summary.Skills)
+	}
+}
+
+func TestLoadSkillUsesYAMLBeforeJSON(t *testing.T) {
+	root := t.TempDir()
+	writeTestSkillFile(t, root, "precedence-skill", "evals.json", `{
+  "skill_name": "precedence-skill",
+  "evals": [
+    {
+      "id": "json-case",
+      "name": "json case",
+      "prompt": "Run the JSON case.",
+      "assertions": ["json assertion"]
+    }
+  ]
+}`)
+	yamlEvals := `skill_name: precedence-skill
+evals:
+  - id: yaml-case
+    name: yaml case
+    prompt: Run the YAML case.
+    assertions:
+      - yaml assertion
+`
+	if err := os.WriteFile(filepath.Join(root, "precedence-skill", "evals", "evals.yaml"), []byte(yamlEvals), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	skill, err := loadSkill(root, "precedence-skill", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skill.Evals) != 1 || skill.Evals[0].ID != "yaml-case" {
+		t.Fatalf("expected YAML evals to take precedence, got %#v", skill.Evals)
+	}
+}
+
+func TestLoadSkillFallsBackToYMLAndJSON(t *testing.T) {
+	root := t.TempDir()
+	writeTestSkillFile(t, root, "yml-skill", "evals.yml", `skill_name: yml-skill
+evals:
+  - id: yml-case
+    name: yml case
+    prompt: Run the YML case.
+    assertions:
+      - yml assertion
+`)
+	writeTestSkillWithEval(t, root, "json-skill", "json-case")
+
+	ymlSkill, err := loadSkill(root, "yml-skill", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ymlSkill.Evals) != 1 || ymlSkill.Evals[0].ID != "yml-case" {
+		t.Fatalf("expected YML evals, got %#v", ymlSkill.Evals)
+	}
+
+	jsonSkill, err := loadSkill(root, "json-skill", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jsonSkill.Evals) != 1 || jsonSkill.Evals[0].ID != "json-case" {
+		t.Fatalf("expected JSON fallback evals, got %#v", jsonSkill.Evals)
+	}
+}
+
+func TestRunWithProviderAllowsExplicitMultiSkillEvalIDInOneSkill(t *testing.T) {
+	root := t.TempDir()
+	writeTestSkillWithEval(t, root, "match-skill", "target-case")
+	writeTestSkillWithEval(t, root, "other-skill", "other-case")
+
+	summary, gatePassed, err := RunWithProvider(context.Background(), Config{
+		Root:      root,
+		Workspace: filepath.Join(t.TempDir(), "workspace"),
+		Baseline:  true,
+		Target:    "target",
+		Judge:     "judge",
+		Skills:    []string{"match-skill", "other-skill"},
+		EvalIDs:   []string{"target-case"},
+		MinPass:   0.9,
+		MinDelta:  0.2,
+	}, &fakeProvider{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !gatePassed {
+		t.Fatalf("expected gates to pass: %#v", summary.GateFailures)
+	}
+	if len(summary.Skills) != 1 || summary.Skills[0].RelPath != "match-skill" {
+		t.Fatalf("expected only matching skill, got %#v", summary.Skills)
+	}
+}
+
 func TestRunWithProviderFailsGateForSmallDelta(t *testing.T) {
 	root := t.TempDir()
 	writeTestSkill(t, root)
@@ -148,8 +349,6 @@ func TestRunWithProviderFailsGateForSmallDelta(t *testing.T) {
 		Baseline:  true,
 		Target:    "target",
 		Judge:     "judge",
-		BaseURL:   "http://example.test/v1",
-		APIKeyEnv: "OPENAI_API_KEY",
 		Skills:    []string{"demo-skill"},
 		EvalIDs:   []string{"case-a"},
 		MinPass:   0.9,
@@ -169,6 +368,21 @@ func TestRunWithProviderFailsGateForSmallDelta(t *testing.T) {
 func TestRunWithProviderAccumulatesAssertionTotals(t *testing.T) {
 	root := t.TempDir()
 	writeTestSkill(t, root)
+	evals := `{
+  "skill_name": "demo-skill",
+  "evals": [
+    {
+      "id": "case-a",
+      "name": "case a",
+      "prompt": "Run case A.",
+      "files": ["evals/files/input.txt"],
+      "assertions": ["passes", "reports missing detail"]
+    }
+  ]
+}`
+	if err := os.WriteFile(filepath.Join(root, "demo-skill", "evals", "evals.json"), []byte(evals), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	summary, gatePassed, err := RunWithProvider(context.Background(), Config{
 		Root:      root,
@@ -176,8 +390,6 @@ func TestRunWithProviderAccumulatesAssertionTotals(t *testing.T) {
 		Baseline:  false,
 		Target:    "target",
 		Judge:     "judge",
-		BaseURL:   "http://example.test/v1",
-		APIKeyEnv: "OPENAI_API_KEY",
 		Skills:    []string{"demo-skill"},
 		EvalIDs:   []string{"case-a"},
 		MinPass:   0.4,
@@ -207,8 +419,6 @@ func TestRunWithProviderReportsMissingEvalID(t *testing.T) {
 		Baseline:  true,
 		Target:    "target",
 		Judge:     "judge",
-		BaseURL:   "http://example.test/v1",
-		APIKeyEnv: "OPENAI_API_KEY",
 		Skills:    []string{"demo-skill"},
 		EvalIDs:   []string{"missing"},
 		MinPass:   0.9,
@@ -219,10 +429,23 @@ func TestRunWithProviderReportsMissingEvalID(t *testing.T) {
 	}
 }
 
+func TestLoadSkillReportsMalformedFrontmatter(t *testing.T) {
+	root := t.TempDir()
+	writeTestSkill(t, root)
+	if err := os.WriteFile(filepath.Join(root, "demo-skill", "SKILL.md"), []byte("---\nname: [\n---\n\nUse the skill.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := loadSkill(root, "demo-skill", nil, true)
+	if err == nil || !strings.Contains(err.Error(), "frontmatter") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestUserPromptRejectsEscapingEvalFile(t *testing.T) {
 	root := t.TempDir()
 	writeTestSkill(t, root)
-	skill, err := loadSkill(root, "demo-skill", []string{"case-a"})
+	skill, err := loadSkill(root, "demo-skill", []string{"case-a"}, true)
 	if err != nil {
 		t.Fatal(err)
 	}

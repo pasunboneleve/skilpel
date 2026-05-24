@@ -15,9 +15,8 @@ func defaultConfig() Config {
 		Root:      ".",
 		Workspace: filepath.Join(".", ".skilpel"),
 		Baseline:  true,
+		Provider:  defaultProviderName,
 		Target:    "gpt-4o-mini",
-		APIKeyEnv: "OPENAI_API_KEY",
-		BaseURL:   "https://api.openai.com/v1",
 		MinPass:   0.90,
 		MinDelta:  0.20,
 	}
@@ -48,6 +47,9 @@ func loadConfig(path string) (Config, error) {
 	if cfg.Judge == "" {
 		cfg.Judge = cfg.Target
 	}
+	if cfg.Provider == "" {
+		cfg.Provider = defaultProviderName
+	}
 	return cfg, nil
 }
 
@@ -64,11 +66,8 @@ func validateConfig(cfg Config) error {
 	if cfg.Judge == "" {
 		return errors.New("judge model is required")
 	}
-	if cfg.BaseURL == "" {
-		return errors.New("base URL is required")
-	}
-	if cfg.APIKeyEnv == "" {
-		return errors.New("api key env is required")
+	if _, err := resolveProviderPlugin(cfg.Provider); err != nil {
+		return err
 	}
 	if cfg.MinPass < 0 || cfg.MinPass > 1 {
 		return errors.New("min pass must be between 0 and 1")

@@ -1,0 +1,111 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    name: Create release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Verify tag matches skilpel version
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#v}"
+          version="$(tr -d '[:space:]' < internal/skilpel/VERSION)"
+          if [[ "$tag_version" != "$version" ]]; then
+            echo "tag version $tag_version does not match internal/skilpel/VERSION $version" >&2
+            exit 1
+          fi
+
+      - name: Extract release notes from changelog
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/release-notes-from-changelog.sh "${GITHUB_REF_NAME#v}" "${GITHUB_REPOSITORY}" > release-notes.md
+
+      - name: Create or update GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          body_path: release-notes.md
+
+  release-assets:
+    name: Build release archive
+    runs-on: ubuntu-latest
+    needs: create-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            archive: skilpel-linux-amd64.tar.gz
+          - goos: darwin
+            goarch: arm64
+            archive: skilpel-darwin-arm64.tar.gz
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify tag matches skilpel version
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#v}"
+          version="$(tr -d '[:space:]' < internal/skilpel/VERSION)"
+          if [[ "$tag_version" != "$version" ]]; then
+            echo "tag version $tag_version does not match internal/skilpel/VERSION $version" >&2
+            exit 1
+          fi
+
+      - name: Build release binary
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          go build -trimpath -o dist/skilpel ./cmd/skilpel
+
+      - name: Verify release binary version
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="skilpel ${GITHUB_REF_NAME#v}"
+          actual="$(./dist/skilpel version)"
+          if [[ "$actual" != "$expected" ]]; then
+            echo "version output $actual does not match $expected" >&2
+            exit 1
+          fi
+
+      - name: Package release archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C dist -czf "${{ matrix.archive }}" skilpel
+
+      - name: Upload GitHub release asset
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release upload "${GITHUB_REF_NAME}" "${{ matrix.archive }}" --clobber
