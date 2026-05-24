@@ -17,6 +17,7 @@ All notable changes to this project are documented here.
 
 ### Fixed
 
+- Print usage and exit successfully for `skilpel run --help`.
 - Treat malformed judge JSON as failed assertions with diagnostic evidence.
 
 ### Documentation

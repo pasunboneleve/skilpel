@@ -3,6 +3,7 @@ package skilpel
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -35,6 +36,10 @@ func Main(ctx context.Context, args []string, stdout, stderr io.Writer) (int, er
 
 	cfg, err := parseRunArgs(args[1:])
 	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			writeUsage(stdout)
+			return exitOK, nil
+		}
 		return exitRuntime, err
 	}
 	if err := validateConfig(cfg); err != nil {
