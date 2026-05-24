@@ -61,7 +61,7 @@ evals:
 ## Current Shape
 
 - `run` discovers skills, executes eval cases, writes JSON artifacts, and applies gates.
-- Progress logs stream as structured JSON on stderr; the final summary remains JSON on stdout.
+- Progress logs stream on stderr as pretty terminal text or structured JSON; the final summary remains JSON on stdout.
 - `--skill` narrows skill selection by repository-relative path.
 - `--eval-id` narrows eval selection by exact ID.
 - `--baseline` enables `without_skill` comparison and baseline-delta gates.

@@ -466,14 +466,57 @@ func TestRunWithProviderAccumulatesAssertionTotals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !gatePassed {
-		t.Fatalf("expected gates to pass: %#v", summary.GateFailures)
+	if gatePassed {
+		t.Fatal("expected gates to fail because one assertion failed")
 	}
 	if summary.Passed != 1 || summary.Failed != 1 {
 		t.Fatalf("expected direct assertion totals 1/1, got %d/%d", summary.Passed, summary.Failed)
 	}
 	if summary.Skills[0].Passed != 1 || summary.Skills[0].Failed != 1 {
 		t.Fatalf("expected skill assertion totals 1/1, got %d/%d", summary.Skills[0].Passed, summary.Skills[0].Failed)
+	}
+	if len(summary.GateFailures) == 0 || !strings.Contains(summary.GateFailures[0], "failed with_skill assertions") {
+		t.Fatalf("unexpected gate failures: %#v", summary.GateFailures)
+	}
+}
+
+func TestRunWithProviderFailsGateForAnyFailedAssertion(t *testing.T) {
+	root := t.TempDir()
+	writeTestSkill(t, root)
+	evals := `{
+  "skill_name": "demo-skill",
+  "evals": [
+    {
+      "id": "case-a",
+      "name": "case a",
+      "prompt": "Run case A.",
+      "assertions": ["passes", "reports missing detail"]
+    }
+  ]
+}`
+	if err := os.WriteFile(filepath.Join(root, "demo-skill", "evals", "evals.json"), []byte(evals), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, gatePassed, err := RunWithProvider(context.Background(), Config{
+		Root:      root,
+		Workspace: filepath.Join(t.TempDir(), "workspace"),
+		Baseline:  false,
+		Target:    "target",
+		Judge:     "judge",
+		Skills:    []string{"demo-skill"},
+		EvalIDs:   []string{"case-a"},
+		MinPass:   0.4,
+		MinDelta:  0.2,
+	}, partialProvider{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gatePassed {
+		t.Fatal("expected gate failure for failed assertion")
+	}
+	if len(summary.GateFailures) == 0 || !strings.Contains(summary.GateFailures[0], "failed with_skill assertions") {
+		t.Fatalf("unexpected gate failures: %#v", summary.GateFailures)
 	}
 }
 

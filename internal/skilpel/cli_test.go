@@ -109,6 +109,7 @@ func TestParseRunArgsAppliesRepeatedFilters(t *testing.T) {
 		"--eval-id", "2",
 		"--no-baseline",
 		"--min-pass", "0.8",
+		"--log-format", "pretty",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -124,6 +125,57 @@ func TestParseRunArgsAppliesRepeatedFilters(t *testing.T) {
 	}
 	if cfg.MinPass != 0.8 {
 		t.Fatalf("unexpected min pass: %v", cfg.MinPass)
+	}
+	if cfg.LogFormat != "pretty" {
+		t.Fatalf("unexpected log format: %v", cfg.LogFormat)
+	}
+}
+
+func TestValidateConfigRejectsUnknownLogFormat(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.Judge = cfg.Target
+	cfg.LogFormat = "loud"
+
+	err := validateConfig(cfg)
+	if err == nil || !strings.Contains(err.Error(), "log format") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPrettyProgressLoggerWritesHumanReadableProgress(t *testing.T) {
+	var logs bytes.Buffer
+	logger := progressLogger(&logs, "pretty")
+
+	logger.InfoContext(context.Background(), "skilpel run started",
+		"event", "run_started",
+		"skills", 2,
+		"evals", 3,
+		"provider", "openai",
+		"target", "target-model",
+		"judge", "judge-model",
+		"baseline", true,
+	)
+	logger.InfoContext(context.Background(), "skilpel eval completed",
+		"event", "eval_completed",
+		"rel_path", "demo-skill",
+		"eval_id", "case-a",
+		"passed", 3,
+		"failed", 0,
+		"total", 3,
+		"with_skill_pass_rate", 1.0,
+		"without_skill_pass_rate", 0.3333333333333333,
+		"delta", 0.6666666666666667,
+	)
+
+	got := logs.String()
+	for _, want := range []string{
+		"skilpel: 2 skills, 3 evals",
+		"provider=openai target=target-model judge=judge-model baseline=true",
+		"PASS [1/3] demo-skill | case-a | assertions=3/3 | with=100% baseline=33% delta=67%",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected pretty logs to include %q, got %q", want, got)
+		}
 	}
 }
 

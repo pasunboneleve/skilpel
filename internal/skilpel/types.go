@@ -20,6 +20,7 @@ type Config struct {
 	MinDelta     float64        `yaml:"minDelta" json:"minDelta"`
 	TargetParams map[string]any `yaml:"targetParams" json:"targetParams"`
 	JudgeParams  map[string]any `yaml:"judgeParams" json:"judgeParams"`
+	LogFormat    string         `yaml:"logFormat" json:"logFormat"`
 	Logger       *slog.Logger   `yaml:"-" json:"-"`
 }
 

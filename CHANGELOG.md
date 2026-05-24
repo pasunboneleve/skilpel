@@ -7,10 +7,15 @@ All notable changes to this project are documented here.
 ### Added
 
 - Stream structured progress logs to stderr during eval runs while preserving the final summary JSON on stdout.
+- Add `--log-format` to choose automatic, JSON, or pretty terminal progress logs.
 
 ### Changed
 
 - Accumulate skill pass-rate totals without retaining per-eval rate slices.
+
+### Fixed
+
+- Fail run gates when any `with_skill` assertion fails, even if the averaged skill pass rate exceeds `--min-pass`.
 
 ## [0.1.0] - 2026-05-24
 

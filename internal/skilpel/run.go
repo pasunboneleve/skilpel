@@ -220,6 +220,9 @@ func meanFromTotal(total float64, count int) float64 {
 func gateFailures(skills []SkillSummary, cfg Config) []string {
 	var failures []string
 	for _, skill := range skills {
+		if skill.Failed > 0 {
+			failures = append(failures, fmt.Sprintf("%s has %d failed with_skill assertions", skill.RelPath, skill.Failed))
+		}
 		if skill.WithSkillPass < cfg.MinPass {
 			failures = append(failures, fmt.Sprintf("%s with_skill pass rate %.3f < %.3f", skill.RelPath, skill.WithSkillPass, cfg.MinPass))
 		}
