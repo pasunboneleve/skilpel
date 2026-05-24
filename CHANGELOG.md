@@ -20,6 +20,7 @@ All notable changes to this project are documented here.
 - Add expanded CLI help for agents and no-argument runs.
 - Add MIT license metadata.
 - Add a README CI badge linked to the main-branch workflow runs.
+- Add a real OpenAI canary for the compiled shell-script skill workflow.
 
 ### Fixed
 

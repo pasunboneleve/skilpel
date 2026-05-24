@@ -39,3 +39,30 @@ jobs:
 
       - name: Run tests
         run: go test ./...
+
+  canary:
+    name: OpenAI shell-script canary
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      RUN_SKILPEL_CANARY: "1"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Check OpenAI canary secret
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "::warning title=OpenAI canary skipped::OPENAI_API_KEY secret is not configured; the real shell-script canary did not run."
+          fi
+
+      - name: Run OpenAI shell-script canary
+        if: env.OPENAI_API_KEY != ''
+        run: go test ./internal/skilpel -run TestCompiledBinaryRunsShellScriptOpenAICanary -count=1

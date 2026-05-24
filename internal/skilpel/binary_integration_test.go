@@ -73,6 +73,60 @@ func TestCompiledBinaryRunsShellScriptYAMLEvalFixture(t *testing.T) {
 	}
 }
 
+func TestCompiledBinaryRunsShellScriptOpenAICanary(t *testing.T) {
+	if os.Getenv("RUN_SKILPEL_CANARY") != "1" {
+		t.Skip("set RUN_SKILPEL_CANARY=1 to run the OpenAI shell-script canary")
+	}
+	if os.Getenv("OPENAI_API_KEY") == "" {
+		t.Skip("OPENAI_API_KEY is not set")
+	}
+
+	repoRoot := testRepoRoot(t)
+	bin := filepath.Join(t.TempDir(), "skilpel")
+
+	build := exec.Command("go", "build", "-o", bin, "./cmd/skilpel")
+	build.Dir = repoRoot
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build skilpel: %v\n%s", err, output)
+	}
+
+	workspace := filepath.Join(t.TempDir(), "workspace")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, bin,
+		"run",
+		"--root", filepath.Join(repoRoot, "testdata", "skills"),
+		"--skill", "shell-script",
+		"--eval-id", "new-script-strict-mode",
+		"--workspace", workspace,
+		"--no-baseline",
+		"--provider", "openai",
+		"--target", "gpt-4o-mini",
+		"--judge", "gpt-4o-mini",
+		"--min-pass", "1",
+		"--min-delta", "0",
+	)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	cmd.Env = append(os.Environ(), "OPENAI_API_KEY="+os.Getenv("OPENAI_API_KEY"))
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("run OpenAI canary: %v\nstdout:\n%s\nstderr:\n%s", err, stdout.String(), stderr.String())
+	}
+
+	var summary Summary
+	if err := json.Unmarshal(stdout.Bytes(), &summary); err != nil {
+		t.Fatalf("parse stdout summary: %v\n%s", err, stdout.String())
+	}
+	if !summary.Gates.Passed {
+		t.Fatalf("expected canary gates to pass: %#v", summary.GateFailures)
+	}
+	if len(summary.Skills) != 1 || summary.Skills[0].RelPath != "shell-script" || summary.Skills[0].WithSkillPass != 1 {
+		t.Fatalf("unexpected canary summary: %#v", summary.Skills)
+	}
+}
+
 func testRepoRoot(t *testing.T) string {
 	t.Helper()
 	_, file, _, ok := runtime.Caller(0)
