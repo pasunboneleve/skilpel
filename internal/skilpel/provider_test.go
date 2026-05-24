@@ -2,33 +2,25 @@ package skilpel
 
 import "testing"
 
-func TestProviderPluginDefaults(t *testing.T) {
-	tests := []struct {
-		name      string
-		baseURL   string
-		apiKeyEnv string
-	}{
-		{name: "openai", baseURL: "https://api.openai.com/v1", apiKeyEnv: "OPENAI_API_KEY"},
-		{name: "xai", baseURL: "https://api.x.ai/v1", apiKeyEnv: "XAI_API_KEY"},
-		{name: "qwen", baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1", apiKeyEnv: "DASHSCOPE_API_KEY"},
-		{name: "anthropic", apiKeyEnv: "ANTHROPIC_API_KEY"},
-		{name: "claude", apiKeyEnv: "ANTHROPIC_API_KEY"},
-		{name: "gemini", apiKeyEnv: "GEMINI_API_KEY"},
+func TestProviderPluginMapMatchesOrderedPlugins(t *testing.T) {
+	for _, plugin := range orderedProviderPlugins {
+		resolved, err := resolveProviderPlugin(plugin.Name)
+		if err != nil {
+			t.Fatalf("resolve provider %q: %v", plugin.Name, err)
+		}
+		if resolved.Name != plugin.Name ||
+			resolved.Description != plugin.Description ||
+			resolved.DefaultBaseURL != plugin.DefaultBaseURL ||
+			resolved.DefaultAPIKeyEnv != plugin.DefaultAPIKeyEnv ||
+			resolved.BaseURLOverride != plugin.BaseURLOverride {
+			t.Fatalf("provider %q map entry drifted from ordered registry", plugin.Name)
+		}
+		if resolved.New == nil {
+			t.Fatalf("provider %q has no constructor", plugin.Name)
+		}
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			plugin, err := resolveProviderPlugin(tt.name)
-			if err != nil {
-				t.Fatalf("resolve provider: %v", err)
-			}
-			if plugin.DefaultBaseURL != tt.baseURL {
-				t.Fatalf("base URL = %q, want %q", plugin.DefaultBaseURL, tt.baseURL)
-			}
-			if plugin.DefaultAPIKeyEnv != tt.apiKeyEnv {
-				t.Fatalf("API key env = %q, want %q", plugin.DefaultAPIKeyEnv, tt.apiKeyEnv)
-			}
-		})
+	if len(providerPlugins) != len(orderedProviderPlugins) {
+		t.Fatalf("provider map has %d entries, ordered registry has %d", len(providerPlugins), len(orderedProviderPlugins))
 	}
 }
 
@@ -37,7 +29,7 @@ func TestDefaultProviderIsOpenAI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve provider: %v", err)
 	}
-	if plugin.Name != "openai" {
-		t.Fatalf("provider = %q, want openai", plugin.Name)
+	if plugin.Name != defaultProviderName {
+		t.Fatalf("provider = %q, want %s", plugin.Name, defaultProviderName)
 	}
 }

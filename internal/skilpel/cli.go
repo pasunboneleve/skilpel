@@ -75,7 +75,7 @@ func parseRunArgs(args []string) (Config, error) {
 	workspace := fs.String("workspace", "", "workspace for JSON artifacts")
 	baseline := fs.Bool("baseline", false, "run without_skill baseline")
 	noBaseline := fs.Bool("no-baseline", false, "disable without_skill baseline")
-	provider := fs.String("provider", "", "provider plugin: openai, xai, qwen, anthropic, claude, or gemini")
+	provider := fs.String("provider", "", "provider plugin: "+providerNamesText())
 	target := fs.String("target", "", "target model")
 	judge := fs.String("judge", "", "judge model")
 	baseURL := fs.String("base-url", "", "provider base URL override")
@@ -147,7 +147,18 @@ func parseRunArgs(args []string) (Config, error) {
 }
 
 func writeUsage(w io.Writer) {
-	fmt.Fprintln(w, helpText)
+	defaultProvider := providerPlugins[defaultProviderName]
+	fmt.Fprintf(
+		w,
+		helpTemplate,
+		defaultProvider.DefaultAPIKeyEnv,
+		defaultProviderName,
+		defaultProviderName,
+		providerHelpText(),
+		providersSupportingBaseURLText(),
+		providerNamesText(),
+	)
+	fmt.Fprintln(w)
 }
 
 func wantsHelp(args []string) bool {
@@ -160,7 +171,7 @@ func wantsHelp(args []string) bool {
 	return false
 }
 
-const helpText = `skilpel evaluates Codex-style skills by running each eval with and without
+const helpTemplate = `skilpel evaluates Codex-style skills by running each eval with and without
 the skill, then judging whether the skill improved the result.
 
 Usage:
@@ -169,12 +180,12 @@ Usage:
   skilpel --help
 
 Typical run:
-  OPENAI_API_KEY=... skilpel run \
+  %s=... skilpel run \
     --root ./skills \
     --skill shell-script \
     --eval-id new-script-strict-mode \
     --workspace ./.skilpel \
-    --provider openai \
+    --provider %s \
     --target gpt-4o-mini \
     --judge gpt-4o-mini \
     --baseline \
@@ -187,23 +198,19 @@ Config file:
   root: ./skills
   workspace: ./.skilpel
   baseline: true
-  provider: openai
+  provider: %s
   target: gpt-4o-mini
   judge: gpt-4o-mini
   minPass: 0.90
   minDelta: 0.20
 
 Providers:
-  openai     OpenAI SDK, default OPENAI_API_KEY, https://api.openai.com/v1
-  xai        OpenAI-compatible, default XAI_API_KEY, https://api.x.ai/v1
-  qwen       OpenAI-compatible DashScope, default DASHSCOPE_API_KEY
-  anthropic  Anthropic SDK, default ANTHROPIC_API_KEY
-  claude     Alias for anthropic
-  gemini     Google GenAI SDK, default GEMINI_API_KEY
+%s
 
 Use --api-key-env to override the environment variable. Use --base-url to
-override OpenAI-compatible and Anthropic endpoints. Gemini uses the SDK's Gemini
-API backend and does not accept --base-url.
+override endpoints for these providers:
+  %s
+Gemini uses the SDK's Gemini API backend and does not accept --base-url.
 
 Eval files:
   skilpel looks beside each skill for evals/evals.yaml, then evals/evals.yml,
@@ -244,7 +251,7 @@ Options:
   --eval-id <id>        eval id to include; repeatable
   --baseline            run without_skill baseline (default true)
   --no-baseline         disable baseline
-  --provider <name>     provider: openai, xai, qwen, anthropic, claude, or gemini
+  --provider <name>     provider: %s
   --target <model>      target model
   --judge <model>       judge model
   --base-url <url>      provider base URL override

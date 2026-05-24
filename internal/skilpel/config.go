@@ -15,7 +15,7 @@ func defaultConfig() Config {
 		Root:      ".",
 		Workspace: filepath.Join(".", ".skilpel"),
 		Baseline:  true,
-		Provider:  "openai",
+		Provider:  defaultProviderName,
 		Target:    "gpt-4o-mini",
 		MinPass:   0.90,
 		MinDelta:  0.20,
@@ -48,7 +48,7 @@ func loadConfig(path string) (Config, error) {
 		cfg.Judge = cfg.Target
 	}
 	if cfg.Provider == "" {
-		cfg.Provider = "openai"
+		cfg.Provider = defaultProviderName
 	}
 	return cfg, nil
 }

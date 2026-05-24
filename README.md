@@ -24,7 +24,7 @@ go test ./...
 go run ./cmd/skilpel run --root ./skills --skill my-skill --eval-id basic --baseline
 ```
 
-Model-backed runs use the provider plugin selected by `--provider` or `provider` in config. Supported providers are `openai`, `xai`, `qwen`, `anthropic`/`claude`, and `gemini`.
+Model-backed runs use the provider plugin selected by `--provider` or `provider` in config. Run `skilpel help` for the current provider list, default API key variables, and endpoint override rules.
 
 ```bash
 OPENAI_API_KEY=... go run ./cmd/skilpel run \
@@ -40,7 +40,7 @@ OPENAI_API_KEY=... go run ./cmd/skilpel run \
   --min-delta 0.20
 ```
 
-OpenAI-compatible providers use their default base URLs unless `--base-url` is set. Default API key variables are `OPENAI_API_KEY`, `XAI_API_KEY`, `DASHSCOPE_API_KEY`, `ANTHROPIC_API_KEY`, and `GEMINI_API_KEY`; override them with `--api-key-env` when needed.
+Use `--api-key-env` when a provider key lives in a non-default environment variable.
 
 ## Eval Files
 

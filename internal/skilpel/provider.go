@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -35,8 +36,10 @@ type CompletionResult struct {
 
 type ProviderPlugin struct {
 	Name             string
+	Description      string
 	DefaultBaseURL   string
 	DefaultAPIKeyEnv string
+	BaseURLOverride  bool
 	New              func(ResolvedProviderConfig) (Provider, error)
 }
 
@@ -46,40 +49,105 @@ type ResolvedProviderConfig struct {
 	APIKey  string
 }
 
-var providerPlugins = map[string]ProviderPlugin{
-	"openai": {
+const (
+	defaultProviderName = "openai"
+	defaultTimeout      = 120 * time.Second
+)
+
+var orderedProviderPlugins = []ProviderPlugin{
+	{
 		Name:             "openai",
+		Description:      "OpenAI SDK",
 		DefaultBaseURL:   "https://api.openai.com/v1",
 		DefaultAPIKeyEnv: "OPENAI_API_KEY",
+		BaseURLOverride:  true,
 		New:              newOpenAICompatibleProvider,
 	},
-	"xai": {
+	{
 		Name:             "xai",
+		Description:      "OpenAI-compatible xAI",
 		DefaultBaseURL:   "https://api.x.ai/v1",
 		DefaultAPIKeyEnv: "XAI_API_KEY",
+		BaseURLOverride:  true,
 		New:              newOpenAICompatibleProvider,
 	},
-	"qwen": {
+	{
 		Name:             "qwen",
+		Description:      "OpenAI-compatible DashScope",
 		DefaultBaseURL:   "https://dashscope.aliyuncs.com/compatible-mode/v1",
 		DefaultAPIKeyEnv: "DASHSCOPE_API_KEY",
+		BaseURLOverride:  true,
 		New:              newOpenAICompatibleProvider,
 	},
-	"anthropic": {
+	{
 		Name:             "anthropic",
+		Description:      "Anthropic SDK",
 		DefaultAPIKeyEnv: "ANTHROPIC_API_KEY",
+		BaseURLOverride:  true,
 		New:              newAnthropicProvider,
 	},
-	"claude": {
+	{
 		Name:             "claude",
+		Description:      "Alias for anthropic",
 		DefaultAPIKeyEnv: "ANTHROPIC_API_KEY",
+		BaseURLOverride:  true,
 		New:              newAnthropicProvider,
 	},
-	"gemini": {
+	{
 		Name:             "gemini",
+		Description:      "Google GenAI SDK",
 		DefaultAPIKeyEnv: "GEMINI_API_KEY",
 		New:              newGeminiProvider,
 	},
+}
+
+var providerPlugins = providerPluginMap(orderedProviderPlugins)
+
+func providerPluginMap(plugins []ProviderPlugin) map[string]ProviderPlugin {
+	mapped := make(map[string]ProviderPlugin, len(plugins))
+	for _, plugin := range plugins {
+		mapped[plugin.Name] = plugin
+	}
+	return mapped
+}
+
+func providerNames() []string {
+	names := make([]string, 0, len(orderedProviderPlugins))
+	for _, plugin := range orderedProviderPlugins {
+		names = append(names, plugin.Name)
+	}
+	return names
+}
+
+func providerNamesText() string {
+	return strings.Join(providerNames(), ", ")
+}
+
+func providerHelpText() string {
+	width := 0
+	for _, plugin := range orderedProviderPlugins {
+		width = max(width, len(plugin.Name))
+	}
+	lines := make([]string, 0, len(orderedProviderPlugins))
+	for _, plugin := range orderedProviderPlugins {
+		parts := []string{plugin.Description, "default " + plugin.DefaultAPIKeyEnv}
+		if plugin.DefaultBaseURL != "" {
+			parts = append(parts, plugin.DefaultBaseURL)
+		}
+		lines = append(lines, fmt.Sprintf("  %-*s  %s", width, plugin.Name, strings.Join(parts, ", ")))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func providersSupportingBaseURLText() string {
+	var names []string
+	for _, plugin := range orderedProviderPlugins {
+		if plugin.BaseURLOverride {
+			names = append(names, plugin.Name)
+		}
+	}
+	slices.Sort(names)
+	return strings.Join(names, ", ")
 }
 
 func newProvider(cfg Config) (Provider, error) {
@@ -111,7 +179,7 @@ func newProvider(cfg Config) (Provider, error) {
 
 func resolveProviderPlugin(name string) (ProviderPlugin, error) {
 	if name == "" {
-		name = "openai"
+		name = defaultProviderName
 	}
 	plugin, ok := providerPlugins[strings.ToLower(name)]
 	if !ok {
@@ -132,7 +200,7 @@ func newOpenAICompatibleProvider(cfg ResolvedProviderConfig) (Provider, error) {
 		client: openai.NewClient(
 			openaioption.WithAPIKey(cfg.APIKey),
 			openaioption.WithBaseURL(cfg.BaseURL),
-			openaioption.WithRequestTimeout(120*time.Second),
+			openaioption.WithRequestTimeout(defaultTimeout),
 		),
 	}, nil
 }
@@ -180,7 +248,7 @@ type anthropicProvider struct {
 func newAnthropicProvider(cfg ResolvedProviderConfig) (Provider, error) {
 	options := []anthropicoption.RequestOption{
 		anthropicoption.WithAPIKey(cfg.APIKey),
-		anthropicoption.WithRequestTimeout(120 * time.Second),
+		anthropicoption.WithRequestTimeout(defaultTimeout),
 	}
 	if cfg.BaseURL != "" {
 		options = append(options, anthropicoption.WithBaseURL(cfg.BaseURL))
