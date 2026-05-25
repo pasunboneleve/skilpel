@@ -15,15 +15,21 @@ func progressLogger(w io.Writer, format string) *slog.Logger {
 }
 
 func progressHandler(w io.Writer, format string) slog.Handler {
-	switch format {
-	case "pretty":
+	if usesPrettyProgress(w, format) {
 		return newPrettyProgressHandler(w)
-	case "auto":
-		if file, ok := w.(*os.File); ok && isTerminal(file) {
-			return newPrettyProgressHandler(w)
-		}
 	}
 	return structuredHandler(w)
+}
+
+func usesPrettyProgress(w io.Writer, format string) bool {
+	if format == "pretty" {
+		return true
+	}
+	if format != "auto" {
+		return false
+	}
+	file, ok := w.(*os.File)
+	return ok && isTerminal(file)
 }
 
 func structuredLogger(w io.Writer) *slog.Logger {
@@ -156,18 +162,7 @@ func (h *prettyProgressHandler) Handle(_ context.Context, record slog.Record) er
 		)
 		return err
 	case "run_completed":
-		icon, color := levelIcon(attrBool(attrs, "gate_passed"))
-		result := "passed"
-		if !attrBool(attrs, "gate_passed") {
-			result = fmt.Sprintf("%d failed assertion%s, %d gate failure%s",
-				attrInt(attrs, "failed"),
-				pluralS(attrInt(attrs, "failed")),
-				attrInt(attrs, "gate_failures"),
-				pluralS(attrInt(attrs, "gate_failures")),
-			)
-		}
-		_, err := fmt.Fprintf(h.w, "\n%s%sResult: %s %s%s\n", colorBold, color, icon, result, colorReset)
-		return err
+		return nil
 	default:
 		_, err := fmt.Fprintf(h.w, "%s\n", record.Message)
 		return err

@@ -34,6 +34,14 @@ func writeSummary(w io.Writer, summary Summary, format string) error {
 	return nil
 }
 
+func writeFinalSummary(w io.Writer, summary Summary, format string, progressVisible bool) error {
+	if progressVisible && (format == "" || format == "text") {
+		printTextFinalSummary(w, summary)
+		return nil
+	}
+	return writeSummary(w, summary, format)
+}
+
 func printTextSummary(w io.Writer, summary Summary) {
 	_, _ = fmt.Fprintf(w, "\n%sValidating skills: %s%s\n", colorBold, reportPath(summary), colorReset)
 
@@ -57,6 +65,15 @@ func printTextSummary(w io.Writer, summary Summary) {
 		}
 	}
 
+	printTextGatesAndResult(w, summary)
+}
+
+func printTextFinalSummary(w io.Writer, summary Summary) {
+	_, _ = fmt.Fprintln(w)
+	printTextGatesAndResult(w, summary)
+}
+
+func printTextGatesAndResult(w io.Writer, summary Summary) {
 	_, _ = fmt.Fprintf(w, "\n%sGates%s\n", colorBold, colorReset)
 	printGateRow(w, "minimum pass rate", summary.Gates.MinPass, summary.Skills, func(skill SkillSummary) float64 {
 		return skill.WithSkillPass

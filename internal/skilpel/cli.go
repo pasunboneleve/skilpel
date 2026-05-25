@@ -59,7 +59,7 @@ func Main(ctx context.Context, args []string, stdout, stderr io.Writer) (int, er
 			if err := validateConfig(cfg); err != nil {
 				return err
 			}
-			logger, closeLogger, err := openProgressLogger(stderr, cfg)
+			logger, closeLogger, progressVisible, err := openProgressLogger(stderr, cfg)
 			if err != nil {
 				return err
 			}
@@ -80,7 +80,7 @@ func Main(ctx context.Context, args []string, stdout, stderr io.Writer) (int, er
 			if emitAnnotations {
 				writeAnnotations(stderr, summary)
 			}
-			if err := writeSummary(stdout, summary, cfg.Output); err != nil {
+			if err := writeFinalSummary(stdout, summary, cfg.Output, progressVisible); err != nil {
 				return err
 			}
 			if !gatePassed {
@@ -193,25 +193,26 @@ func configFromFlagSet(fs *pflag.FlagSet, skillArgs []string) (Config, error) {
 	return cfg, nil
 }
 
-func openProgressLogger(stderr io.Writer, cfg Config) (*slog.Logger, func(), error) {
+func openProgressLogger(stderr io.Writer, cfg Config) (*slog.Logger, func(), bool, error) {
+	progressVisible := usesPrettyProgress(stderr, cfg.LogFormat)
 	visible := progressHandler(stderr, cfg.LogFormat)
 	if cfg.LogFile == "" {
-		return slog.New(visible), func() {}, nil
+		return slog.New(visible), func() {}, progressVisible, nil
 	}
 
 	if dir := filepath.Dir(cfg.LogFile); dir != "." && dir != "" {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return nil, func() {}, fmt.Errorf("create log file directory: %w", err)
+			return nil, func() {}, false, fmt.Errorf("create log file directory: %w", err)
 		}
 	}
 	file, err := os.Create(cfg.LogFile)
 	if err != nil {
-		return nil, func() {}, fmt.Errorf("create log file: %w", err)
+		return nil, func() {}, false, fmt.Errorf("create log file: %w", err)
 	}
 	closeLogger := func() {
 		_ = file.Close()
 	}
-	return slog.New(multiHandler{visible, structuredHandler(file)}), closeLogger, nil
+	return slog.New(multiHandler{visible, structuredHandler(file)}), closeLogger, progressVisible, nil
 }
 
 func writeUsage(w io.Writer) {

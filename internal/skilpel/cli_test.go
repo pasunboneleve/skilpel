@@ -187,6 +187,13 @@ func TestPrettyProgressLoggerWritesHumanReadableProgress(t *testing.T) {
 		"without_skill_pass_rate", 0.3333333333333333,
 		"delta", 0.6666666666666667,
 	)
+	logger.InfoContext(context.Background(), "skilpel run completed",
+		"event", "run_completed",
+		"passed", 3,
+		"failed", 0,
+		"gate_passed", true,
+		"gate_failures", 0,
+	)
 
 	got := logs.String()
 	for _, want := range []string{
@@ -207,6 +214,9 @@ func TestPrettyProgressLoggerWritesHumanReadableProgress(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected pretty logs to include %q, got %q", want, got)
 		}
+	}
+	if strings.Contains(got, "Result:") {
+		t.Fatalf("pretty progress should leave final result to the text summary, got %q", got)
 	}
 }
 
@@ -242,12 +252,15 @@ func TestOpenProgressLoggerKeepsPrettyVisibleAndStructuredFile(t *testing.T) {
 	var visible bytes.Buffer
 	logFile := filepath.Join(t.TempDir(), "logs", "progress.ndjson")
 
-	logger, closeLogger, err := openProgressLogger(&visible, Config{
+	logger, closeLogger, progressVisible, err := openProgressLogger(&visible, Config{
 		LogFormat: "pretty",
 		LogFile:   logFile,
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !progressVisible {
+		t.Fatal("expected pretty progress to be visible")
 	}
 	logger.InfoContext(context.Background(), "skilpel run started",
 		"event", "run_started",
@@ -288,7 +301,7 @@ func TestOpenProgressLoggerReportsLogFileErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, _, err := openProgressLogger(io.Discard, Config{
+	_, _, _, err := openProgressLogger(io.Discard, Config{
 		LogFormat: "pretty",
 		LogFile:   logFile,
 	})

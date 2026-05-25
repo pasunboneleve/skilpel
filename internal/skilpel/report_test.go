@@ -57,6 +57,59 @@ func TestPrintTextSummaryUsesSkillValidatorStyleSections(t *testing.T) {
 	}
 }
 
+func TestWriteFinalSummaryOmitsEvalRowsWhenPrettyProgressIsVisible(t *testing.T) {
+	summary := Summary{
+		Root:   "/tmp/skills",
+		Passed: 2,
+		Failed: 0,
+		Gates: GateSummary{
+			MinPass:  0.9,
+			MinDelta: 0.2,
+			Baseline: true,
+			Passed:   true,
+		},
+		Skills: []SkillSummary{
+			{
+				RelPath:          "shell-script",
+				Passed:           2,
+				Failed:           0,
+				WithSkillPass:    1,
+				WithoutSkillPass: 0.5,
+				Delta:            0.5,
+			},
+		},
+	}
+
+	var output bytes.Buffer
+	if err := writeFinalSummary(&output, summary, "text", true); err != nil {
+		t.Fatal(err)
+	}
+
+	got := output.String()
+	for _, duplicate := range []string{
+		"Validating skills:",
+		"Evals",
+		"shell-script",
+		"    with:",
+		"    without:",
+		"    delta:",
+	} {
+		if strings.Contains(got, duplicate) {
+			t.Fatalf("final summary duplicated %q after pretty progress, got %q", duplicate, got)
+		}
+	}
+	for _, want := range []string{
+		"Gates",
+		"✓ minimum pass rate:",
+		"✓ minimum delta:",
+		"Result: passed",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected final summary to include %q, got %q", want, got)
+		}
+	}
+}
+
 func TestWriteAnnotationsEscapesGateFailures(t *testing.T) {
 	summary := Summary{
 		GateFailures: []string{"skill failed 50%\nretry"},
