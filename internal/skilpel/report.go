@@ -14,6 +14,8 @@ const (
 	colorYellow = "\033[33m"
 	colorCyan   = "\033[36m"
 	colorBold   = "\033[1m"
+
+	textResultDivider = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 )
 
 func writeSummary(w io.Writer, summary Summary, format string) error {
@@ -74,7 +76,7 @@ func printTextFinalSummary(w io.Writer, summary Summary) {
 }
 
 func printTextGatesAndResult(w io.Writer, summary Summary) {
-	_, _ = fmt.Fprintf(w, "\n%sGates%s\n", colorBold, colorReset)
+	_, _ = fmt.Fprintf(w, "%s\n\n%sGates%s\n", textResultDivider, colorBold, colorReset)
 	printGateRow(w, "minimum pass rate", summary.Gates.MinPass, summary.Skills, func(skill SkillSummary) float64 {
 		return skill.WithSkillPass
 	})
@@ -91,7 +93,7 @@ func printTextGatesAndResult(w io.Writer, summary Summary) {
 
 	_, _ = fmt.Fprintln(w)
 	if summary.Gates.Passed {
-		_, _ = fmt.Fprintf(w, "%s%sResult: passed%s\n", colorBold, colorGreen, colorReset)
+		_, _ = fmt.Fprintf(w, "%s%sResult: ✓ passed%s\n", colorBold, colorGreen, colorReset)
 	} else {
 		parts := []string{}
 		if summary.Failed > 0 {
@@ -100,7 +102,7 @@ func printTextGatesAndResult(w io.Writer, summary Summary) {
 		if len(summary.GateFailures) > 0 {
 			parts = append(parts, fmt.Sprintf("%s%d gate failure%s%s", colorRed, len(summary.GateFailures), pluralS(len(summary.GateFailures)), colorReset))
 		}
-		_, _ = fmt.Fprintf(w, "%sResult: %s%s\n", colorBold, strings.Join(parts, ", "), colorReset)
+		_, _ = fmt.Fprintf(w, "%s%sResult: ✗ %s%s\n", colorBold, colorRed, strings.Join(parts, ", "), colorReset)
 	}
 	_, _ = fmt.Fprintln(w)
 }

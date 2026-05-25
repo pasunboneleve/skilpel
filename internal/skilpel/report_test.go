@@ -48,8 +48,9 @@ func TestPrintTextSummaryUsesSkillValidatorStyleSections(t *testing.T) {
 		"delta:",
 		colorBold + "50%" + colorReset,
 		"Gates",
+		textResultDivider,
 		"✓ minimum pass rate:",
-		"Result: passed",
+		"Result: ✓ passed",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected text summary to include %q, got %q", want, got)
@@ -99,13 +100,56 @@ func TestWriteFinalSummaryOmitsEvalRowsWhenPrettyProgressIsVisible(t *testing.T)
 		}
 	}
 	for _, want := range []string{
+		textResultDivider,
 		"Gates",
 		"✓ minimum pass rate:",
 		"✓ minimum delta:",
-		"Result: passed",
+		"Result: ✓ passed",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected final summary to include %q, got %q", want, got)
+		}
+	}
+}
+
+func TestWriteFinalSummaryShowsFailureIcon(t *testing.T) {
+	summary := Summary{
+		Failed: 1,
+		Gates: GateSummary{
+			MinPass:  0.9,
+			MinDelta: 0.2,
+			Baseline: true,
+			Passed:   false,
+		},
+		GateFailures: []string{"shell-script failed 50%"},
+		Skills: []SkillSummary{
+			{
+				RelPath:       "shell-script",
+				Passed:        1,
+				Failed:        1,
+				WithSkillPass: 0.5,
+				Delta:         0,
+			},
+		},
+	}
+
+	var output bytes.Buffer
+	if err := writeFinalSummary(&output, summary, "text", true); err != nil {
+		t.Fatal(err)
+	}
+
+	got := output.String()
+	for _, want := range []string{
+		textResultDivider,
+		"✗ minimum pass rate:",
+		"✗ minimum delta:",
+		"✗ shell-script failed 50%",
+		"Result: ✗",
+		"1 failed assertion",
+		"1 gate failure",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected failed final summary to include %q, got %q", want, got)
 		}
 	}
 }

@@ -15,6 +15,8 @@ All notable changes to this project are documented here.
 - Switch CLI parsing to Cobra/PFlag conventions to align help, version, shorthand flags, and command behavior with `skill-validator`.
 - Make text reports show `with`, `without`, and `delta` rates as indented rows with bold percentages.
 - Avoid duplicating eval rows when pretty progress and text output are both enabled.
+- Prefix the final text `Result` line with a pass or fail icon.
+- Add a divider before the final text gates and result block.
 
 ## [0.2.0] - 2026-05-24
 
