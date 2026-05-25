@@ -31,7 +31,7 @@ func RunWithProvider(ctx context.Context, cfg Config, provider Provider) (Summar
 		return Summary{}, false, fmt.Errorf("create workspace: %w", err)
 	}
 
-	skills, err := discoverSkills(root, cfg.Skills, cfg.EvalIDs)
+	skills, warnings, err := discoverSkills(root, cfg.Skills, cfg.EvalIDs)
 	if err != nil {
 		return Summary{}, false, err
 	}
@@ -44,6 +44,7 @@ func RunWithProvider(ctx context.Context, cfg Config, provider Provider) (Summar
 			slog.String("event", "run_started"),
 			slog.Int("skills", len(skills)),
 			slog.Int("evals", totalEvals),
+			slog.String("root", root),
 			slog.String("workspace", workspace),
 			slog.Bool("baseline", cfg.Baseline),
 			slog.Float64("min_pass", cfg.MinPass),
@@ -52,10 +53,19 @@ func RunWithProvider(ctx context.Context, cfg Config, provider Provider) (Summar
 			slog.String("target", cfg.Target),
 			slog.String("judge", cfg.Judge),
 		)
+		for _, warning := range warnings {
+			cfg.Logger.WarnContext(ctx, "skilpel warning",
+				slog.String("event", "warning"),
+				slog.String("skill", warning.Skill),
+				slog.String("warning", warning.Message),
+			)
+		}
 	}
 
 	summary := Summary{
+		Root:      root,
 		Workspace: workspace,
+		Warnings:  warnings,
 		StartedAt: started,
 		Gates:     GateSummary{MinPass: cfg.MinPass, MinDelta: cfg.MinDelta, Baseline: cfg.Baseline},
 	}

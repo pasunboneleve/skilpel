@@ -40,6 +40,16 @@ OPENAI_API_KEY=... go run ./cmd/skilpel run \
   --min-delta 0.20
 ```
 
+The default output is a human-readable text report that follows
+`skill-validator` terminal conventions. Pretty progress shows eval rows as they
+finish, yellow warnings for skipped skills, red failures, and a TTY-only live
+spinner while a local run waits for provider responses. Use `--output=json`
+when scripts need the final summary on stdout:
+
+```bash
+go run ./cmd/skilpel run --config skilpel.yaml --output=json
+```
+
 Use `--api-key-env` when a provider key lives in a non-default environment variable.
 
 ## Eval Files
@@ -61,7 +71,11 @@ evals:
 ## Current Shape
 
 - `run` discovers skills, executes eval cases, writes JSON artifacts, and applies gates.
-- Progress logs stream on stderr as pretty terminal text or structured JSON; the final summary remains JSON on stdout.
+- `--output`/`-o` accepts `text`, `json`, or `markdown`; the default is `text`.
+- `--emit-annotations` emits GitHub Actions error annotations for failed gates.
+- Progress logs stream on stderr as pretty terminal text or structured JSON; the final summary format is controlled by `--output`.
+- Pretty progress keeps the live spinner and progress bar TTY-only, so CI logs contain durable rows rather than animation frames.
+- `--log-file` writes structured JSON progress logs to a file while leaving the visible progress format controlled by `--log-format`.
 - `--skill` narrows skill selection by repository-relative path.
 - `--eval-id` narrows eval selection by exact ID.
 - `--baseline` enables `without_skill` comparison and baseline-delta gates.
@@ -86,6 +100,7 @@ go test ./...
 - `go run ./cmd/skilpel --help`
 - `go run ./cmd/skilpel run --help`
 - `go run ./cmd/skilpel version`
+- [CLI output](docs/cli-output.md)
 - [Changelog](CHANGELOG.md)
 
 ## License

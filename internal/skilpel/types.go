@@ -21,6 +21,8 @@ type Config struct {
 	TargetParams map[string]any `yaml:"targetParams" json:"targetParams"`
 	JudgeParams  map[string]any `yaml:"judgeParams" json:"judgeParams"`
 	LogFormat    string         `yaml:"logFormat" json:"logFormat"`
+	LogFile      string         `yaml:"logFile" json:"logFile"`
+	Output       string         `yaml:"output" json:"output"`
 	Logger       *slog.Logger   `yaml:"-" json:"-"`
 }
 
@@ -100,12 +102,19 @@ type GradeSummary struct {
 type Summary struct {
 	Passed       int            `json:"passed"`
 	Failed       int            `json:"failed"`
+	Warnings     []RunWarning   `json:"warnings,omitempty"`
 	Skills       []SkillSummary `json:"skills"`
+	Root         string         `json:"root"`
 	Workspace    string         `json:"workspace"`
 	Gates        GateSummary    `json:"gates"`
 	GateFailures []string       `json:"gate_failures,omitempty"`
 	StartedAt    time.Time      `json:"started_at"`
 	CompletedAt  time.Time      `json:"completed_at"`
+}
+
+type RunWarning struct {
+	Skill   string `json:"skill,omitempty"`
+	Message string `json:"message"`
 }
 
 type SkillSummary struct {

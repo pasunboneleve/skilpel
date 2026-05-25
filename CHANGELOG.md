@@ -4,6 +4,28 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-25
+
+### Added
+
+- Add `--log-file` for keeping structured JSON progress logs in a file while showing human-readable progress in the terminal or CI logs.
+- Add skill-validator-style CLI flags `--output`/`-o` and `--emit-annotations`.
+
+### Changed
+
+- BREAKING: default `skilpel run` stdout is now a human-readable text report. Use `--output=json` for the previous machine-readable final summary.
+- Switch CLI parsing to Cobra/PFlag conventions to align help, version, shorthand flags, and command behavior with `skill-validator`.
+- Make text reports show `with`, `without`, and `delta` rates as indented rows with bold percentages.
+- Avoid duplicating eval rows when pretty progress and text output are both enabled.
+- Prefix the final text `Result` line with a pass or fail icon.
+- Add a divider before the final text gates and result block.
+- Show skipped-skill warnings in yellow and add per-eval progress bars to pretty progress output.
+- Add a TTY-only live spinner and progress line while evals are running.
+
+### Documentation
+
+- Document text output, structured logs, pretty progress, warnings, and live TTY status.
+
 ## [0.2.0] - 2026-05-24
 
 ### Added

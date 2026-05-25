@@ -127,6 +127,24 @@ Use the skill.
 	}
 }
 
+func writeTestSkillWithoutEvals(t *testing.T, root, name string) {
+	t.Helper()
+	dir := filepath.Join(root, name)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	skill := fmt.Sprintf(`---
+name: %s
+description: Test skill.
+---
+
+Use the skill.
+`, name)
+	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(skill), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func writeTestSkillFile(t *testing.T, root, name, evalFile, evals string) {
 	t.Helper()
 	dir := filepath.Join(root, name)
@@ -281,6 +299,47 @@ func TestRunWithProviderSkipsAutoDiscoveredSkillsWithoutEvalID(t *testing.T) {
 	}
 	if len(summary.Skills) != 1 || summary.Skills[0].RelPath != "match-skill" {
 		t.Fatalf("expected only matching skill, got %#v", summary.Skills)
+	}
+}
+
+func TestRunWithProviderWarnsForAutoDiscoveredSkillsWithoutEvals(t *testing.T) {
+	root := t.TempDir()
+	writeTestSkillWithEval(t, root, "match-skill", "target-case")
+	writeTestSkillWithoutEvals(t, root, "empty-skill")
+	var logs bytes.Buffer
+
+	summary, gatePassed, err := RunWithProvider(context.Background(), Config{
+		Root:      root,
+		Workspace: filepath.Join(t.TempDir(), "workspace"),
+		Baseline:  true,
+		Target:    "target",
+		Judge:     "judge",
+		MinPass:   0.9,
+		MinDelta:  0.2,
+		Logger:    structuredLogger(&logs),
+	}, &fakeProvider{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !gatePassed {
+		t.Fatalf("expected gates to pass: %#v", summary.GateFailures)
+	}
+	if len(summary.Warnings) != 1 || summary.Warnings[0].Skill != "empty-skill" {
+		t.Fatalf("expected empty skill warning, got %#v", summary.Warnings)
+	}
+
+	events := decodeJSONLogEvents(t, logs.String())
+	foundWarning := false
+	for _, event := range events {
+		if event["event"] == "warning" {
+			foundWarning = true
+			if event["severity"] != "WARN" || event["skill"] != "empty-skill" {
+				t.Fatalf("unexpected warning event: %#v", event)
+			}
+		}
+	}
+	if !foundWarning {
+		t.Fatalf("expected warning event, got %#v", events)
 	}
 }
 
