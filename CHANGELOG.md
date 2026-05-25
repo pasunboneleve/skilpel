@@ -18,6 +18,7 @@ All notable changes to this project are documented here.
 - Prefix the final text `Result` line with a pass or fail icon.
 - Add a divider before the final text gates and result block.
 - Show skipped-skill warnings in yellow and add per-eval progress bars to pretty progress output.
+- Add a TTY-only live spinner and progress line while evals are running.
 
 ## [0.2.0] - 2026-05-24
 

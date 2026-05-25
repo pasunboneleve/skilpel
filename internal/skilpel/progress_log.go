@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 )
 
 func progressLogger(w io.Writer, format string) *slog.Logger {
@@ -17,7 +18,7 @@ func progressLogger(w io.Writer, format string) *slog.Logger {
 
 func progressHandler(w io.Writer, format string) slog.Handler {
 	if usesPrettyProgress(w, format) {
-		return newPrettyProgressHandler(w)
+		return newPrettyProgressHandlerWithLive(w, usesLiveProgress(w, format))
 	}
 	return structuredHandler(w)
 }
@@ -31,6 +32,11 @@ func usesPrettyProgress(w io.Writer, format string) bool {
 	}
 	file, ok := w.(*os.File)
 	return ok && isTerminal(file)
+}
+
+func usesLiveProgress(w io.Writer, format string) bool {
+	file, ok := w.(*os.File)
+	return ok && isTerminal(file) && usesPrettyProgress(w, format)
 }
 
 func structuredLogger(w io.Writer) *slog.Logger {
@@ -78,14 +84,29 @@ type prettyProgressState struct {
 	done        int
 	warnings    bool
 	evalsHeader bool
+	live        bool
+	liveLine    bool
+	closed      bool
+	spin        int
+	stop        chan struct{}
 }
 
 func newPrettyProgressHandler(w io.Writer) *prettyProgressHandler {
-	return &prettyProgressHandler{w: w, state: &prettyProgressState{}}
+	return newPrettyProgressHandlerWithLive(w, false)
+}
+
+func newPrettyProgressHandlerWithLive(w io.Writer, live bool) *prettyProgressHandler {
+	return &prettyProgressHandler{w: w, state: &prettyProgressState{live: live}}
 }
 
 func (h *prettyProgressHandler) Enabled(context.Context, slog.Level) bool {
 	return true
+}
+
+func (h *prettyProgressHandler) Close() {
+	h.state.mu.Lock()
+	defer h.state.mu.Unlock()
+	h.stopLiveStatus()
 }
 
 func (h *prettyProgressHandler) Handle(_ context.Context, record slog.Record) error {
@@ -107,6 +128,7 @@ func (h *prettyProgressHandler) Handle(_ context.Context, record slog.Record) er
 		h.state.done = 0
 		h.state.warnings = false
 		h.state.evalsHeader = false
+		h.state.closed = false
 		_, err := fmt.Fprintf(
 			h.w,
 			"\n%sValidating skills: %s%s\n\n%sConfiguration%s\n  %sℹ %d skill%s, %d eval%s%s\n  %sℹ provider=%s target=%s judge=%s without_skill=%t%s\n",
@@ -128,8 +150,10 @@ func (h *prettyProgressHandler) Handle(_ context.Context, record slog.Record) er
 			attrBool(attrs, "baseline"),
 			colorReset,
 		)
+		h.startLiveStatus()
 		return err
 	case "warning":
+		h.clearLiveLine()
 		if !h.state.warnings {
 			if _, err := fmt.Fprintf(h.w, "\n%sWarnings%s\n", colorBold, colorReset); err != nil {
 				return err
@@ -144,8 +168,10 @@ func (h *prettyProgressHandler) Handle(_ context.Context, record slog.Record) er
 			attrString(attrs, "warning"),
 			colorReset,
 		)
+		h.drawLiveLine()
 		return err
 	case "eval_completed":
+		h.clearLiveLine()
 		if !h.state.evalsHeader {
 			if _, err := fmt.Fprintf(h.w, "\n%sEvals%s\n", colorBold, colorReset); err != nil {
 				return err
@@ -186,11 +212,15 @@ func (h *prettyProgressHandler) Handle(_ context.Context, record slog.Record) er
 			formatOptionalRate(attrs, "delta"),
 			colorReset,
 		)
+		h.drawLiveLine()
 		return err
 	case "run_completed":
+		h.stopLiveStatus()
 		return nil
 	default:
+		h.clearLiveLine()
 		_, err := fmt.Fprintf(h.w, "%s\n", record.Message)
+		h.drawLiveLine()
 		return err
 	}
 }
@@ -205,6 +235,66 @@ func progressBar(done, total int) string {
 		filled = width
 	}
 	return "[" + strings.Repeat("█", filled) + strings.Repeat("─", width-filled) + "]"
+}
+
+func (h *prettyProgressHandler) startLiveStatus() {
+	if !h.state.live || h.state.stop != nil {
+		return
+	}
+	h.state.stop = make(chan struct{})
+	h.drawLiveLine()
+	go func(state *prettyProgressState, w io.Writer, stop <-chan struct{}) {
+		ticker := time.NewTicker(120 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				state.mu.Lock()
+				if state.closed {
+					state.mu.Unlock()
+					return
+				}
+				state.spin++
+				writeLiveLine(w, state)
+				state.mu.Unlock()
+			case <-stop:
+				return
+			}
+		}
+	}(h.state, h.w, h.state.stop)
+}
+
+func (h *prettyProgressHandler) stopLiveStatus() {
+	if !h.state.live {
+		return
+	}
+	if h.state.stop != nil {
+		close(h.state.stop)
+		h.state.stop = nil
+	}
+	h.state.closed = true
+	h.clearLiveLine()
+}
+
+func (h *prettyProgressHandler) clearLiveLine() {
+	if !h.state.live || !h.state.liveLine {
+		return
+	}
+	_, _ = fmt.Fprint(h.w, "\r\033[2K")
+	h.state.liveLine = false
+}
+
+func (h *prettyProgressHandler) drawLiveLine() {
+	if !h.state.live || h.state.closed {
+		return
+	}
+	writeLiveLine(h.w, h.state)
+}
+
+func writeLiveLine(w io.Writer, state *prettyProgressState) {
+	frame := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}[state.spin%10]
+	_, _ = fmt.Fprintf(w, "\r\033[2K  %s%s%s %s [%d/%d] running", colorCyan, frame, colorReset, progressBar(state.done, state.total), state.done, state.total)
+	state.liveLine = true
 }
 
 func (h *prettyProgressHandler) WithAttrs(attrs []slog.Attr) slog.Handler {

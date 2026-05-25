@@ -197,7 +197,7 @@ func openProgressLogger(stderr io.Writer, cfg Config) (*slog.Logger, func(), boo
 	progressVisible := usesPrettyProgress(stderr, cfg.LogFormat)
 	visible := progressHandler(stderr, cfg.LogFormat)
 	if cfg.LogFile == "" {
-		return slog.New(visible), func() {}, progressVisible, nil
+		return slog.New(visible), progressCloser(visible), progressVisible, nil
 	}
 
 	if dir := filepath.Dir(cfg.LogFile); dir != "." && dir != "" {
@@ -210,9 +210,17 @@ func openProgressLogger(stderr io.Writer, cfg Config) (*slog.Logger, func(), boo
 		return nil, func() {}, false, fmt.Errorf("create log file: %w", err)
 	}
 	closeLogger := func() {
+		progressCloser(visible)()
 		_ = file.Close()
 	}
 	return slog.New(multiHandler{visible, structuredHandler(file)}), closeLogger, progressVisible, nil
+}
+
+func progressCloser(handler slog.Handler) func() {
+	if closer, ok := handler.(interface{ Close() }); ok {
+		return closer.Close
+	}
+	return func() {}
 }
 
 func writeUsage(w io.Writer) {

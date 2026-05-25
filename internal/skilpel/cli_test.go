@@ -247,6 +247,49 @@ func TestPrettyProgressLoggerWritesWarningsInYellow(t *testing.T) {
 	}
 }
 
+func TestPrettyProgressLoggerLiveStatusClearsAroundDurableRows(t *testing.T) {
+	var logs bytes.Buffer
+	handler := newPrettyProgressHandlerWithLive(&logs, true)
+	defer handler.Close()
+	logger := slog.New(handler)
+
+	logger.InfoContext(context.Background(), "skilpel run started",
+		"event", "run_started",
+		"skills", 1,
+		"evals", 2,
+		"root", "/tmp/skills",
+	)
+	logger.InfoContext(context.Background(), "skilpel eval completed",
+		"event", "eval_completed",
+		"rel_path", "demo-skill",
+		"eval_id", "case-a",
+		"passed", 1,
+		"failed", 0,
+		"with_skill_pass_rate", 1.0,
+	)
+	logger.InfoContext(context.Background(), "skilpel run completed",
+		"event", "run_completed",
+		"passed", 1,
+		"failed", 0,
+		"gate_passed", true,
+		"gate_failures", 0,
+	)
+
+	got := logs.String()
+	for _, want := range []string{
+		"[──────────] [0/2] running",
+		"\r\033[2K",
+		"✓ [█████─────] [1/2] demo-skill / case-a:",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected live progress output to include %q, got %q", want, got)
+		}
+	}
+	if strings.Contains(strings.TrimSuffix(got, "\r\033[2K"), "Result:") {
+		t.Fatalf("pretty progress should leave final result to text summary, got %q", got)
+	}
+}
+
 func TestProgressLoggerHandlesTypedNilFileAsJSON(t *testing.T) {
 	var file *os.File
 
