@@ -98,7 +98,7 @@ func (h *prettyProgressHandler) Handle(_ context.Context, record slog.Record) er
 		h.state.done = 0
 		_, err := fmt.Fprintf(
 			h.w,
-			"\n%sValidating skills: %s%s\n\n%sConfiguration%s\n  %sℹ %d skill%s, %d eval%s%s\n  %sℹ provider=%s target=%s judge=%s baseline=%t%s\n\n%sEvals%s\n",
+			"\n%sValidating skills: %s%s\n\n%sConfiguration%s\n  %sℹ %d skill%s, %d eval%s%s\n  %sℹ provider=%s target=%s judge=%s without_skill=%t%s\n\n%sEvals%s\n",
 			colorBold,
 			attrString(attrs, "root"),
 			colorReset,
@@ -128,7 +128,7 @@ func (h *prettyProgressHandler) Handle(_ context.Context, record slog.Record) er
 		}
 		_, err := fmt.Fprintf(
 			h.w,
-			"  %s%s [%d/%d] %s / %s:%s %d passed, %d failed, with=%s, baseline=%s, delta=%s\n",
+			"  %s%s [%d/%d] %s / %s:%s %d passed, %d failed\n    %swith:%s %s%s%s\n    %swithout:%s %s%s%s\n    %sdelta:%s %s%s%s\n",
 			color,
 			icon,
 			h.state.done,
@@ -138,9 +138,21 @@ func (h *prettyProgressHandler) Handle(_ context.Context, record slog.Record) er
 			colorReset,
 			attrInt(attrs, "passed"),
 			attrInt(attrs, "failed"),
+			colorCyan,
+			colorReset,
+			colorBold,
 			formatRate(attrFloat(attrs, "with_skill_pass_rate")),
+			colorReset,
+			colorCyan,
+			colorReset,
+			colorBold,
 			formatOptionalRate(attrs, "without_skill_pass_rate"),
+			colorReset,
+			colorCyan,
+			colorReset,
+			colorBold,
 			formatOptionalRate(attrs, "delta"),
+			colorReset,
 		)
 		return err
 	case "run_completed":

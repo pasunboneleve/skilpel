@@ -42,19 +42,19 @@ func printTextSummary(w io.Writer, summary Summary) {
 		icon, color := levelIcon(skill.Failed == 0)
 		_, _ = fmt.Fprintf(
 			w,
-			"  %s%s %s:%s %d passed, %d failed, with=%s",
+			"  %s%s %s:%s %d passed, %d failed\n",
 			color,
 			icon,
 			skill.RelPath,
 			colorReset,
 			skill.Passed,
 			skill.Failed,
-			formatRate(skill.WithSkillPass),
 		)
+		printRateRow(w, "with", skill.WithSkillPass)
 		if summary.Gates.Baseline {
-			_, _ = fmt.Fprintf(w, ", baseline=%s, delta=%s", formatRate(skill.WithoutSkillPass), formatRate(skill.Delta))
+			printRateRow(w, "without", skill.WithoutSkillPass)
+			printRateRow(w, "delta", skill.Delta)
 		}
-		_, _ = fmt.Fprintln(w)
 	}
 
 	_, _ = fmt.Fprintf(w, "\n%sGates%s\n", colorBold, colorReset)
@@ -66,7 +66,7 @@ func printTextSummary(w io.Writer, summary Summary) {
 			return skill.Delta
 		})
 	} else {
-		_, _ = fmt.Fprintf(w, "  %sℹ baseline disabled; delta gate skipped%s\n", colorCyan, colorReset)
+		_, _ = fmt.Fprintf(w, "  %sℹ without_skill disabled; delta gate skipped%s\n", colorCyan, colorReset)
 	}
 	for _, failure := range summary.GateFailures {
 		_, _ = fmt.Fprintf(w, "  %s✗ %s%s\n", colorRed, failure, colorReset)
@@ -98,6 +98,10 @@ func printGateRow(w io.Writer, label string, threshold float64, skills []SkillSu
 	}
 	icon, color := levelIcon(passed)
 	_, _ = fmt.Fprintf(w, "  %s%s %s:%s threshold %s\n", color, icon, label, colorReset, formatRate(threshold))
+}
+
+func printRateRow(w io.Writer, label string, rate float64) {
+	_, _ = fmt.Fprintf(w, "    %s%s:%s %s%s%s\n", colorCyan, label, colorReset, colorBold, formatRate(rate), colorReset)
 }
 
 func printMarkdownSummary(w io.Writer, summary Summary) {

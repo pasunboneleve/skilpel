@@ -193,10 +193,16 @@ func TestPrettyProgressLoggerWritesHumanReadableProgress(t *testing.T) {
 		"Validating skills: /tmp/skills",
 		"Configuration",
 		"ℹ 2 skills, 3 evals",
-		"provider=openai target=target-model judge=judge-model baseline=true",
+		"provider=openai target=target-model judge=judge-model without_skill=true",
 		"Evals",
 		"✓ [1/3] demo-skill / case-a:",
-		"3 passed, 0 failed, with=100%, baseline=33%, delta=67%",
+		"3 passed, 0 failed",
+		"with:",
+		"100%",
+		"without:",
+		"33%",
+		"delta:",
+		"67%",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected pretty logs to include %q, got %q", want, got)

@@ -13,6 +13,7 @@ All notable changes to this project are documented here.
 
 - BREAKING: default `skilpel run` stdout is now a human-readable text report. Use `--output=json` for the previous machine-readable final summary.
 - Switch CLI parsing to Cobra/PFlag conventions to align help, version, shorthand flags, and command behavior with `skill-validator`.
+- Make text reports show `with`, `without`, and `delta` rates as indented rows with bold percentages.
 
 ## [0.2.0] - 2026-05-24
 
