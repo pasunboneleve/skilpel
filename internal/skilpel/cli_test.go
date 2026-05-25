@@ -202,7 +202,7 @@ func TestPrettyProgressLoggerWritesHumanReadableProgress(t *testing.T) {
 		"ℹ 2 skills, 3 evals",
 		"provider=openai target=target-model judge=judge-model without_skill=true",
 		"Evals",
-		"✓ [███───────] [1/3] demo-skill / case-a:",
+		"✓ demo-skill / case-a:",
 		"3 passed, 0 failed",
 		"with:",
 		"100%",
@@ -277,9 +277,10 @@ func TestPrettyProgressLoggerLiveStatusClearsAroundDurableRows(t *testing.T) {
 
 	got := logs.String()
 	for _, want := range []string{
+		"without_skill=false\x1b[0m\n\n\r\x1b[2K",
 		"[──────────] [0/2] running",
 		"\r\033[2K",
-		"✓ [█████─────] [1/2] demo-skill / case-a:",
+		"✓ demo-skill / case-a:",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected live progress output to include %q, got %q", want, got)
@@ -287,6 +288,11 @@ func TestPrettyProgressLoggerLiveStatusClearsAroundDurableRows(t *testing.T) {
 	}
 	if strings.Contains(strings.TrimSuffix(got, "\r\033[2K"), "Result:") {
 		t.Fatalf("pretty progress should leave final result to text summary, got %q", got)
+	}
+	for _, line := range strings.Split(got, "\n") {
+		if strings.Contains(line, "demo-skill / case-a:") && strings.Contains(line, "[█████─────]") {
+			t.Fatalf("durable eval row should not include progress bar, got %q", got)
+		}
 	}
 }
 
@@ -313,7 +319,7 @@ func TestPrettyProgressLoggerPreservesWithAttrs(t *testing.T) {
 		"with_skill_pass_rate", 1.0,
 	)
 
-	if got := logs.String(); !strings.Contains(got, "✓ [----------] [1/0] demo-skill / case-a:") {
+	if got := logs.String(); !strings.Contains(got, "✓ demo-skill / case-a:") {
 		t.Fatalf("expected With attrs in pretty log, got %q", got)
 	}
 }

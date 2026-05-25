@@ -185,12 +185,9 @@ func (h *prettyProgressHandler) Handle(_ context.Context, record slog.Record) er
 		}
 		_, err := fmt.Fprintf(
 			h.w,
-			"  %s%s %s [%d/%d] %s / %s:%s %d passed, %d failed\n    %swith:%s %s%s%s\n    %swithout:%s %s%s%s\n    %sdelta:%s %s%s%s\n",
+			"  %s%s %s / %s:%s %d passed, %d failed\n    %swith:%s %s%s%s\n    %swithout:%s %s%s%s\n    %sdelta:%s %s%s%s\n",
 			color,
 			icon,
-			progressBar(h.state.done, h.state.total),
-			h.state.done,
-			h.state.total,
 			attrString(attrs, "rel_path"),
 			displayEval(attrs),
 			colorReset,
@@ -242,6 +239,7 @@ func (h *prettyProgressHandler) startLiveStatus() {
 		return
 	}
 	h.state.stop = make(chan struct{})
+	_, _ = fmt.Fprintln(h.w)
 	h.drawLiveLine()
 	go func(state *prettyProgressState, w io.Writer, stop <-chan struct{}) {
 		ticker := time.NewTicker(120 * time.Millisecond)
