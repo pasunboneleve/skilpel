@@ -318,6 +318,11 @@ Logs:
   terminal. Use --log-file to also write structured JSON progress logs to a file
   without printing those JSON lines in the terminal or CI step log.
 
+  Pretty progress prints durable eval rows as they finish, yellow warnings for
+  skipped skills, and red failures. When stderr is a real terminal, it also
+  keeps a live spinner and progress bar near the prompt while provider calls
+  are running; captured CI logs do not receive animation frames.
+
 Output:
   The default --output=text follows skill-validator's human-readable terminal
   report style. Use --output=json for scripts and CI artifacts, or

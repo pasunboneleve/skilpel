@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-25
+
 ### Added
 
 - Add `--log-file` for keeping structured JSON progress logs in a file while showing human-readable progress in the terminal or CI logs.
@@ -19,6 +21,10 @@ All notable changes to this project are documented here.
 - Add a divider before the final text gates and result block.
 - Show skipped-skill warnings in yellow and add per-eval progress bars to pretty progress output.
 - Add a TTY-only live spinner and progress line while evals are running.
+
+### Documentation
+
+- Document text output, structured logs, pretty progress, warnings, and live TTY status.
 
 ## [0.2.0] - 2026-05-24
 
