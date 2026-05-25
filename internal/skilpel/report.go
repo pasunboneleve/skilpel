@@ -46,6 +46,7 @@ func writeFinalSummary(w io.Writer, summary Summary, format string, progressVisi
 
 func printTextSummary(w io.Writer, summary Summary) {
 	_, _ = fmt.Fprintf(w, "\n%sValidating skills: %s%s\n", colorBold, reportPath(summary), colorReset)
+	printTextWarnings(w, summary.Warnings)
 
 	_, _ = fmt.Fprintf(w, "\n%sEvals%s\n", colorBold, colorReset)
 	for _, skill := range summary.Skills {
@@ -105,6 +106,20 @@ func printTextGatesAndResult(w io.Writer, summary Summary) {
 		_, _ = fmt.Fprintf(w, "%s%sResult: ✗ %s%s\n", colorBold, colorRed, strings.Join(parts, ", "), colorReset)
 	}
 	_, _ = fmt.Fprintln(w)
+}
+
+func printTextWarnings(w io.Writer, warnings []RunWarning) {
+	if len(warnings) == 0 {
+		return
+	}
+	_, _ = fmt.Fprintf(w, "\n%sWarnings%s\n", colorBold, colorReset)
+	for _, warning := range warnings {
+		skill := warning.Skill
+		if skill != "" {
+			skill += ": "
+		}
+		_, _ = fmt.Fprintf(w, "  %s⚠ %s%s%s\n", colorYellow, skill, warning.Message, colorReset)
+	}
 }
 
 func printGateRow(w io.Writer, label string, threshold float64, skills []SkillSummary, value func(SkillSummary) float64) {

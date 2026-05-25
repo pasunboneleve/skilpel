@@ -102,6 +102,7 @@ type GradeSummary struct {
 type Summary struct {
 	Passed       int            `json:"passed"`
 	Failed       int            `json:"failed"`
+	Warnings     []RunWarning   `json:"warnings,omitempty"`
 	Skills       []SkillSummary `json:"skills"`
 	Root         string         `json:"root"`
 	Workspace    string         `json:"workspace"`
@@ -109,6 +110,11 @@ type Summary struct {
 	GateFailures []string       `json:"gate_failures,omitempty"`
 	StartedAt    time.Time      `json:"started_at"`
 	CompletedAt  time.Time      `json:"completed_at"`
+}
+
+type RunWarning struct {
+	Skill   string `json:"skill,omitempty"`
+	Message string `json:"message"`
 }
 
 type SkillSummary struct {

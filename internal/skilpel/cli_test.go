@@ -202,7 +202,7 @@ func TestPrettyProgressLoggerWritesHumanReadableProgress(t *testing.T) {
 		"ℹ 2 skills, 3 evals",
 		"provider=openai target=target-model judge=judge-model without_skill=true",
 		"Evals",
-		"✓ [1/3] demo-skill / case-a:",
+		"✓ [███───────] [1/3] demo-skill / case-a:",
 		"3 passed, 0 failed",
 		"with:",
 		"100%",
@@ -217,6 +217,33 @@ func TestPrettyProgressLoggerWritesHumanReadableProgress(t *testing.T) {
 	}
 	if strings.Contains(got, "Result:") {
 		t.Fatalf("pretty progress should leave final result to the text summary, got %q", got)
+	}
+}
+
+func TestPrettyProgressLoggerWritesWarningsInYellow(t *testing.T) {
+	var logs bytes.Buffer
+	logger := progressLogger(&logs, "pretty")
+
+	logger.InfoContext(context.Background(), "skilpel run started",
+		"event", "run_started",
+		"skills", 1,
+		"evals", 1,
+		"root", "/tmp/skills",
+	)
+	logger.WarnContext(context.Background(), "skilpel warning",
+		"event", "warning",
+		"skill", "empty-skill",
+		"warning", "no evals file found; skipping skill",
+	)
+
+	got := logs.String()
+	for _, want := range []string{
+		"Warnings",
+		colorYellow + "⚠ empty-skill: no evals file found; skipping skill" + colorReset,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected pretty warning to include %q, got %q", want, got)
+		}
 	}
 }
 
@@ -243,7 +270,7 @@ func TestPrettyProgressLoggerPreservesWithAttrs(t *testing.T) {
 		"with_skill_pass_rate", 1.0,
 	)
 
-	if got := logs.String(); !strings.Contains(got, "✓ [1/0] demo-skill / case-a:") {
+	if got := logs.String(); !strings.Contains(got, "✓ [----------] [1/0] demo-skill / case-a:") {
 		t.Fatalf("expected With attrs in pretty log, got %q", got)
 	}
 }

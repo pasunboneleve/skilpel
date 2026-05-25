@@ -2,6 +2,7 @@ package skilpel
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -39,27 +40,40 @@ var evalFileNames = []string{
 	filepath.Join("evals", "evals.json"),
 }
 
-func discoverSkills(root string, relpaths []string, evalIDs []string) ([]Skill, error) {
+func discoverSkills(root string, relpaths []string, evalIDs []string) ([]Skill, []RunWarning, error) {
+	var warnings []RunWarning
 	if len(relpaths) > 0 {
 		skills := make([]Skill, 0, len(relpaths))
 		requireEvalIDs := len(relpaths) == 1
 		for _, rel := range relpaths {
 			skill, err := loadSkill(root, rel, evalIDs, requireEvalIDs)
 			if err != nil {
-				return nil, err
+				if isMissingEvalsError(err) {
+					warnings = append(warnings, missingEvalsWarning(rel))
+					continue
+				}
+				return nil, nil, err
 			}
 			if len(skill.Evals) == 0 {
+				if len(evalIDs) > 0 {
+					continue
+				}
+				warnings = append(warnings, noEvalsWarning(rel))
 				continue
 			}
 			skills = append(skills, skill)
 		}
 		if missing := missingEvalIDs(skills, evalIDs); len(missing) > 0 {
-			return nil, fmt.Errorf("missing eval ids for selected skills: %s", strings.Join(missing, ", "))
+			return nil, nil, fmt.Errorf("missing eval ids for selected skills: %s", strings.Join(missing, ", "))
 		}
-		return skills, nil
+		if len(skills) == 0 {
+			return nil, nil, fmt.Errorf("no selected skills with evals found under %s", root)
+		}
+		return skills, warnings, nil
 	}
 
 	var rels []string
+	warningByRel := map[string]RunWarning{}
 	if err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -68,37 +82,76 @@ func discoverSkills(root string, relpaths []string, evalIDs []string) ([]Skill, 
 			return nil
 		}
 		if _, err := os.Stat(filepath.Join(path, "SKILL.md")); err == nil {
-			if _, _, err := findEvalsFile(path); err == nil {
+			if _, _, evalErr := findEvalsFile(path); evalErr == nil {
 				rel, err := filepath.Rel(root, path)
 				if err != nil {
 					return err
 				}
 				rels = append(rels, filepath.ToSlash(rel))
-			} else if !os.IsNotExist(err) {
-				return err
+			} else if errors.Is(evalErr, os.ErrNotExist) {
+				rel, err := filepath.Rel(root, path)
+				if err != nil {
+					return err
+				}
+				rel = filepath.ToSlash(rel)
+				warningByRel[rel] = missingEvalsWarning(rel)
+			} else {
+				return evalErr
 			}
 		}
 		return nil
 	}); err != nil {
-		return nil, fmt.Errorf("discover skills: %w", err)
+		return nil, nil, fmt.Errorf("discover skills: %w", err)
 	}
 	sort.Strings(rels)
+	for _, rel := range sortedWarningRels(warningByRel) {
+		warnings = append(warnings, warningByRel[rel])
+	}
 
 	skills := make([]Skill, 0, len(rels))
 	for _, rel := range rels {
 		skill, err := loadSkill(root, rel, evalIDs, false)
 		if err != nil {
-			return nil, err
+			if isMissingEvalsError(err) {
+				warnings = append(warnings, missingEvalsWarning(rel))
+				continue
+			}
+			return nil, nil, err
 		}
 		if len(skill.Evals) == 0 {
+			if len(evalIDs) > 0 {
+				continue
+			}
+			warnings = append(warnings, noEvalsWarning(rel))
 			continue
 		}
 		skills = append(skills, skill)
 	}
 	if len(skills) == 0 {
-		return nil, fmt.Errorf("no skills with evals found under %s", root)
+		return nil, nil, fmt.Errorf("no skills with evals found under %s", root)
 	}
-	return skills, nil
+	return skills, warnings, nil
+}
+
+func isMissingEvalsError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "find evals for") && errors.Is(err, os.ErrNotExist)
+}
+
+func missingEvalsWarning(rel string) RunWarning {
+	return RunWarning{Skill: rel, Message: "no evals file found; skipping skill"}
+}
+
+func noEvalsWarning(rel string) RunWarning {
+	return RunWarning{Skill: rel, Message: "no evals found; skipping skill"}
+}
+
+func sortedWarningRels(warnings map[string]RunWarning) []string {
+	rels := make([]string, 0, len(warnings))
+	for rel := range warnings {
+		rels = append(rels, rel)
+	}
+	sort.Strings(rels)
+	return rels
 }
 
 func loadSkill(root, rel string, evalIDs []string, requireEvalIDs bool) (Skill, error) {

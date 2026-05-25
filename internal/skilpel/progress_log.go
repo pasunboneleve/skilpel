@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"sync"
 )
 
@@ -72,9 +73,11 @@ type prettyProgressHandler struct {
 }
 
 type prettyProgressState struct {
-	mu    sync.Mutex
-	total int
-	done  int
+	mu          sync.Mutex
+	total       int
+	done        int
+	warnings    bool
+	evalsHeader bool
 }
 
 func newPrettyProgressHandler(w io.Writer) *prettyProgressHandler {
@@ -102,9 +105,11 @@ func (h *prettyProgressHandler) Handle(_ context.Context, record slog.Record) er
 	case "run_started":
 		h.state.total = attrInt(attrs, "evals")
 		h.state.done = 0
+		h.state.warnings = false
+		h.state.evalsHeader = false
 		_, err := fmt.Fprintf(
 			h.w,
-			"\n%sValidating skills: %s%s\n\n%sConfiguration%s\n  %sℹ %d skill%s, %d eval%s%s\n  %sℹ provider=%s target=%s judge=%s without_skill=%t%s\n\n%sEvals%s\n",
+			"\n%sValidating skills: %s%s\n\n%sConfiguration%s\n  %sℹ %d skill%s, %d eval%s%s\n  %sℹ provider=%s target=%s judge=%s without_skill=%t%s\n",
 			colorBold,
 			attrString(attrs, "root"),
 			colorReset,
@@ -122,11 +127,31 @@ func (h *prettyProgressHandler) Handle(_ context.Context, record slog.Record) er
 			attrString(attrs, "judge"),
 			attrBool(attrs, "baseline"),
 			colorReset,
-			colorBold,
+		)
+		return err
+	case "warning":
+		if !h.state.warnings {
+			if _, err := fmt.Fprintf(h.w, "\n%sWarnings%s\n", colorBold, colorReset); err != nil {
+				return err
+			}
+			h.state.warnings = true
+		}
+		_, err := fmt.Fprintf(
+			h.w,
+			"  %s⚠ %s: %s%s\n",
+			colorYellow,
+			attrString(attrs, "skill"),
+			attrString(attrs, "warning"),
 			colorReset,
 		)
 		return err
 	case "eval_completed":
+		if !h.state.evalsHeader {
+			if _, err := fmt.Fprintf(h.w, "\n%sEvals%s\n", colorBold, colorReset); err != nil {
+				return err
+			}
+			h.state.evalsHeader = true
+		}
 		h.state.done++
 		icon, color := levelIcon(true)
 		if attrInt(attrs, "failed") > 0 {
@@ -134,9 +159,10 @@ func (h *prettyProgressHandler) Handle(_ context.Context, record slog.Record) er
 		}
 		_, err := fmt.Fprintf(
 			h.w,
-			"  %s%s [%d/%d] %s / %s:%s %d passed, %d failed\n    %swith:%s %s%s%s\n    %swithout:%s %s%s%s\n    %sdelta:%s %s%s%s\n",
+			"  %s%s %s [%d/%d] %s / %s:%s %d passed, %d failed\n    %swith:%s %s%s%s\n    %swithout:%s %s%s%s\n    %sdelta:%s %s%s%s\n",
 			color,
 			icon,
+			progressBar(h.state.done, h.state.total),
 			h.state.done,
 			h.state.total,
 			attrString(attrs, "rel_path"),
@@ -167,6 +193,18 @@ func (h *prettyProgressHandler) Handle(_ context.Context, record slog.Record) er
 		_, err := fmt.Fprintf(h.w, "%s\n", record.Message)
 		return err
 	}
+}
+
+func progressBar(done, total int) string {
+	const width = 10
+	if total <= 0 {
+		return "[----------]"
+	}
+	filled := done * width / total
+	if filled > width {
+		filled = width
+	}
+	return "[" + strings.Repeat("█", filled) + strings.Repeat("─", width-filled) + "]"
 }
 
 func (h *prettyProgressHandler) WithAttrs(attrs []slog.Attr) slog.Handler {

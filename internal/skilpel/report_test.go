@@ -12,6 +12,9 @@ func TestPrintTextSummaryUsesSkillValidatorStyleSections(t *testing.T) {
 		Passed:    2,
 		Failed:    0,
 		Workspace: "/tmp/workspace",
+		Warnings: []RunWarning{
+			{Skill: "empty-skill", Message: "no evals file found; skipping skill"},
+		},
 		Gates: GateSummary{
 			MinPass:  0.9,
 			MinDelta: 0.2,
@@ -38,6 +41,8 @@ func TestPrintTextSummaryUsesSkillValidatorStyleSections(t *testing.T) {
 	got := output.String()
 	for _, want := range []string{
 		"Validating skills: /tmp/skills",
+		"Warnings",
+		colorYellow + "⚠ empty-skill: no evals file found; skipping skill" + colorReset,
 		"Evals",
 		"✓ shell-script:",
 		"2 passed, 0 failed",
