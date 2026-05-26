@@ -6,18 +6,43 @@
 
 It is a focused Go evaluator for [agentskills.io](https://agentskills.io)-style repositories. The current version targets local skill development and CI gates: run one skill or one eval case, compare `with_skill` against `without_skill`, and fail clearly when a skill does not pass or improve enough over baseline.
 
-## Why This Exists
+<br>
+
+<p align="center" style="margin: 0.35rem 0 0.35rem 0;">
+  <a href="https://www.metmuseum.org/art/collection/search/53215"
+  target="_blank"
+  rel="noopener noreferrer">
+    <img
+        src="docs/images/katagami.jpg"
+        alt="Katagami stencil with hemp-leaf pattern"
+        style="width:58.5%;"
+        />
+  </a>
+</p>
+
+<p align="center" style="margin: 0 0 1.25rem 0;">
+    <sub>A scalpel cuts away the excess; a stencil preserves the pattern.</sub>
+</p>
+
+<!--
+Image provenance:
+Japanese katagami stencil with hemp-leaf pattern.
+The Metropolitan Museum of Art, public domain.
+Source: https://www.metmuseum.org/art/collection/search/53215
+-->
+
+## Why this exists
 
 Skill repositories need a repeatable way to answer a narrow question: did this skill change the model output in the intended direction? `skilpel` keeps that check local, explicit, and suitable for CI.
 
-## Architecture At A Glance
+## Architecture at a glance
 
 - `cmd/skilpel` owns the CLI entrypoint.
 - `internal/skilpel` owns skill discovery, prompt construction, provider calls, judging, gates, and artifacts.
 - Eval files live beside each skill under `evals/`.
 - Run artifacts are written to the configured workspace, usually `./.skilpel`.
 
-## Quick Start
+## Quick start
 
 ```bash
 go test ./...
@@ -52,7 +77,7 @@ go run ./cmd/skilpel run --config skilpel.yaml --output=json
 
 Use `--api-key-env` when a provider key lives in a non-default environment variable.
 
-## Eval Files
+## Eval files
 
 - Skill evals may be stored as `evals/evals.yaml`, `evals/evals.yml`, or `evals/evals.json`.
 - `evals/evals.yaml` is preferred; `evals/evals.yml` is read next; `evals/evals.json` is the fallback.
@@ -68,7 +93,7 @@ evals:
       - Produces the expected result.
 ```
 
-## Current Shape
+## Current shape
 
 - `run` discovers skills, executes eval cases, writes JSON artifacts, and applies gates.
 - `--output`/`-o` accepts `text`, `json`, or `markdown`; the default is `text`.
@@ -89,7 +114,7 @@ evals:
 go test ./...
 ```
 
-## Repository Map
+## Repository map
 
 - `cmd/skilpel/`: CLI binary.
 - `internal/skilpel/`: evaluator implementation and tests.
@@ -119,6 +144,6 @@ go install github.com/pasunboneleve/skilpel/cmd/skilpel@$SKILPEL_VERSION
 
 Tagged releases also publish prebuilt archives for Linux amd64 and macOS arm64.
 
-## Prior Art
+## Prior art
 
 `skilpel` is inspired by [`agent-skills-eval`](https://github.com/darkrishabh/agent-skills-eval) and agentskills.io-style skill layouts. It focuses on the subset needed for fast local iteration and CI: skill discovery, eval-case filtering, provider-backed model calls, baseline comparison, and explicit pass/fail thresholds.
