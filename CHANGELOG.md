@@ -7,6 +7,8 @@ All notable changes to this project are documented here.
 ### Documentation
 
 - Add a linked katagami stencil image to the README introduction.
+- Add a transparent-background PNG version of the README stencil image.
+- Restructure README as a project synopsis and move eval-file details into docs.
 
 ## [0.3.0] - 2026-05-25
 
