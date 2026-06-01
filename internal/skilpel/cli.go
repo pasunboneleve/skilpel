@@ -286,8 +286,10 @@ override endpoints for these providers:
 Gemini uses the SDK's Gemini API backend and does not accept --base-url.
 
 Eval files:
-  skilpel looks beside each skill for evals/evals.yaml, then evals/evals.yml,
-  then evals/evals.json. YAML and JSON use the same structure.
+  skilpel looks inside each skill for <skill>/evals/evals.yaml, then
+  <skill>/evals/evals.yml, then <skill>/evals/evals.json. YAML and JSON use the
+  same structure. Use --root or config root to choose the skills tree; without
+  --skill, skilpel walks that tree for directories containing SKILL.md.
 
   skill_name: shell-script
   evals:

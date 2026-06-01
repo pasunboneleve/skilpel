@@ -6,57 +6,24 @@
 with and without a skill, asks a judge model to score the outputs, and turns the
 result into local artifacts, terminal feedback, and CI-friendly gates.
 
-<br>
-
-<p align="center" style="margin: 0.35rem 0 0.35rem 0;">
-  <a href="https://www.metmuseum.org/art/collection/search/53215"
-  target="_blank"
-  rel="noopener noreferrer">
-    <img
-        src="docs/images/katagami.png"
-        alt="Katagami stencil with hemp-leaf pattern"
-        style="width:58.5%;"
-        />
-  </a>
+<p style="margin: 1rem 0;">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/skilpel-output-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/images/skilpel-output-light.svg">
+    <img alt="skilpel CLI output showing with-skill and without-skill comparison" src="docs/images/skilpel-output-light.svg">
+  </picture>
 </p>
 
-<p align="center" style="margin: 0 0 1.25rem 0;">
-    <sub>A scalpel cuts away the excess; a stencil preserves the pattern.</sub>
-</p>
-
-<!--
-Image provenance:
-Japanese katagami stencil with hemp-leaf pattern.
-The Metropolitan Museum of Art, public domain.
-Source: https://www.metmuseum.org/art/collection/search/53215
--->
+Skills are prompts or instructions. `skilpel` runs the same eval with the skill
+enabled and disabled, then compares the judged results. The point is to make the
+claim concrete: this skill improves model output by this much, against these
+assertions, under these gates.
 
 ## Why this exists
 
 Skill repositories need a repeatable way to answer a narrow question: did this
 skill change model output in the intended direction? `skilpel` keeps that check
 local, explicit, and suitable for CI.
-
-## Current scope
-
-`skilpel run` supports:
-
-- provider plugins for OpenAI, xAI, Qwen, Anthropic/Claude, and Gemini
-- per-skill eval files in YAML or JSON
-- skill and eval filtering with `--skill` and `--eval-id`
-- optional `without_skill` baseline comparison
-- pass-rate and baseline-delta gates
-- JSON artifacts in a workspace directory
-- text, JSON, and Markdown final summaries
-- structured or pretty progress logs on stderr
-
-## Architecture at a glance
-
-- `cmd/skilpel` owns the CLI entrypoint.
-- `internal/skilpel` owns skill discovery, prompt construction, provider calls,
-  judging, gates, progress logs, reports, and artifacts.
-- Eval files live beside each skill under `evals/`.
-- Run artifacts are written to the configured workspace, usually `./.skilpel`.
 
 ## Quick start
 
@@ -89,13 +56,41 @@ For scripts and downstream tooling, keep the final summary on stdout as JSON:
 go run ./cmd/skilpel run --config skilpel.yaml --output=json
 ```
 
-On an interactive terminal, pretty progress gives a quick read on the active
-run while keeping scripts pointed at stdout:
-
-![Pretty progress terminal preview](docs/images/pretty-progress.svg)
-
 See [CLI output](docs/cli-output.md) for stdout, stderr, log-file, and exit-code
 behavior.
+
+## Current scope
+
+`skilpel run` supports:
+
+- provider plugins for OpenAI, xAI, Qwen, Anthropic/Claude, and Gemini
+- per-skill eval files in YAML or JSON
+- skill and eval filtering with `--skill` and `--eval-id`
+- optional `without_skill` baseline comparison
+- pass-rate and baseline-delta gates
+- JSON artifacts in a workspace directory
+- text, JSON, and Markdown final summaries
+- structured or pretty progress logs on stderr
+
+## Architecture at a glance
+
+- `cmd/skilpel` owns the CLI entrypoint.
+- `internal/skilpel` owns skill discovery, prompt construction, provider calls,
+  judging, gates, progress logs, reports, and artifacts.
+- Eval files live with the skill they test, usually as
+  `<skill>/evals/evals.yaml`.
+- Run artifacts are written to the configured workspace, usually `./.skilpel`.
+
+## Installation
+
+For downstream CI, install a tagged version rather than tracking a moving
+branch:
+
+```bash
+go install github.com/pasunboneleve/skilpel/cmd/skilpel@$SKILPEL_VERSION
+```
+
+Tagged releases also publish prebuilt archives for Linux amd64 and macOS arm64.
 
 ## Validation
 
@@ -119,16 +114,36 @@ go test ./...
 - [Eval files](docs/eval-files.md)
 - [Changelog](CHANGELOG.md)
 
-## Installation
+For a complete repository model with skills and evals kept close together, see
+[`pasunboneleve/oiticica-style`](https://github.com/pasunboneleve/oiticica-style).
 
-For downstream CI, install a tagged version rather than tracking a moving
-branch:
+## The name
 
-```bash
-go install github.com/pasunboneleve/skilpel/cmd/skilpel@$SKILPEL_VERSION
-```
+<p align="center" style="margin: 0.35rem 0 0.35rem 0;">
+  <a href="https://www.metmuseum.org/art/collection/search/53215"
+  target="_blank"
+  rel="noopener noreferrer">
+    <img
+        src="docs/images/katagami.png"
+        alt="Katagami stencil with hemp-leaf pattern"
+        style="width:58.5%;"
+        />
+  </a>
+</p>
 
-Tagged releases also publish prebuilt archives for Linux amd64 and macOS arm64.
+<p align="center" style="margin: 0 0 1.25rem 0;">
+    <sub>A scalpel cuts away the excess; a stencil preserves the pattern.</sub>
+</p>
+
+<!--
+Image provenance:
+Japanese katagami stencil with hemp-leaf pattern.
+The Metropolitan Museum of Art, public domain.
+Source: https://www.metmuseum.org/art/collection/search/53215
+-->
+
+The name points at the work `skilpel` is meant to do: cut away vague confidence
+and preserve the repeatable pattern that makes a skill useful.
 
 ## Prior art
 

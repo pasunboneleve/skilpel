@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="492" viewBox="0 0 920 492" role="img" aria-labelledby="title desc">
+  <title id="title">skilpel CLI output</title>
+  <desc id="desc">skilpel CLI output showing configuration, with-skill and without-skill comparison, gates, and a passed result.</desc>
+  <style>
+    .bg { fill: #0d1117; }
+    .text { fill: #c9d1d9; font: 15px ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+    .muted { fill: #8b949e; }
+    .bold { font-weight: 700; }
+    .green { fill: #3fb950; }
+    .cyan { fill: #58a6ff; }
+  </style>
+  <rect class="bg" x="0" y="0" width="920" height="492" rx="8" />
+
+  <text class="text bold" x="28" y="34">Validating skills: ./skills</text>
+
+  <text class="text bold" x="28" y="80">Configuration</text>
+  <text class="text" x="48" y="110"><tspan class="cyan">ℹ</tspan> 1 skill, 1 eval</text>
+  <text class="text" x="48" y="140"><tspan class="cyan">ℹ</tspan> provider=openai target=gpt-4o-mini judge=gpt-4o-mini without_skill=true</text>
+
+  <text class="text bold" x="28" y="194">Evals</text>
+  <text class="text" x="48" y="224"><tspan class="green">✓</tspan> shell-script / new-script-strict-mode: 2 passed, 0 failed</text>
+  <text class="text" x="70" y="254"><tspan class="cyan">with:</tspan> <tspan class="bold">100%</tspan></text>
+  <text class="text" x="70" y="284"><tspan class="cyan">without:</tspan> <tspan class="bold">50%</tspan></text>
+  <text class="text" x="70" y="314"><tspan class="cyan">delta:</tspan> <tspan class="bold">50%</tspan></text>
+
+  <text class="muted text" x="28" y="350">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</text>
+
+  <text class="text bold" x="28" y="386">Gates</text>
+  <text class="text" x="48" y="416"><tspan class="green">✓</tspan> minimum pass rate: threshold 90%</text>
+  <text class="text" x="48" y="446"><tspan class="green">✓</tspan> minimum delta: threshold 20%</text>
+
+  <text class="text" x="28" y="478"><tspan class="green bold">Result: ✓ passed</tspan></text>
+</svg>

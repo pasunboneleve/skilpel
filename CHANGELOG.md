@@ -8,6 +8,7 @@ All notable changes to this project are documented here.
 
 - Add a linked katagami stencil image to the README introduction.
 - Add a transparent-background PNG version of the README stencil image.
+- Clarify the per-skill eval-file layout and link a canonical repository model.
 - Restructure README as a project synopsis and move eval-file details into docs.
 
 ## [0.3.0] - 2026-05-25
