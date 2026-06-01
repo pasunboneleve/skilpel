@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-06-01
+
 ### Documentation
 
 - Add a linked katagami stencil image to the README introduction.
