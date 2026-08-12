@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-12
+
 ### Added
 
 - Add an `openai-chat` provider for models and compatible endpoints that still
