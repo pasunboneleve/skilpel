@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"slices"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	anthropicoption "github.com/anthropics/anthropic-sdk-go/option"
 	openai "github.com/openai/openai-go/v3"
 	openaioption "github.com/openai/openai-go/v3/option"
+	"github.com/openai/openai-go/v3/responses"
 	"github.com/openai/openai-go/v3/shared"
 	"google.golang.org/genai"
 )
@@ -57,7 +59,15 @@ const (
 var orderedProviderPlugins = []ProviderPlugin{
 	{
 		Name:             "openai",
-		Description:      "OpenAI SDK",
+		Description:      "OpenAI Responses API",
+		DefaultBaseURL:   "https://api.openai.com/v1",
+		DefaultAPIKeyEnv: "OPENAI_API_KEY",
+		BaseURLOverride:  true,
+		New:              newOpenAIProvider,
+	},
+	{
+		Name:             "openai-chat",
+		Description:      "OpenAI Chat Completions compatibility",
 		DefaultBaseURL:   "https://api.openai.com/v1",
 		DefaultAPIKeyEnv: "OPENAI_API_KEY",
 		BaseURLOverride:  true,
@@ -192,16 +202,61 @@ type openAICompatibleProvider struct {
 	client openai.Client
 }
 
+type openAIProvider struct {
+	client openai.Client
+}
+
+func newOpenAIProvider(cfg ResolvedProviderConfig) (Provider, error) {
+	if cfg.BaseURL == "" {
+		return nil, fmt.Errorf("provider %q requires a base URL", cfg.Name)
+	}
+	return &openAIProvider{client: newOpenAIClient(cfg)}, nil
+}
+
 func newOpenAICompatibleProvider(cfg ResolvedProviderConfig) (Provider, error) {
 	if cfg.BaseURL == "" {
 		return nil, fmt.Errorf("provider %q requires a base URL", cfg.Name)
 	}
 	return &openAICompatibleProvider{
-		client: openai.NewClient(
-			openaioption.WithAPIKey(cfg.APIKey),
-			openaioption.WithBaseURL(cfg.BaseURL),
-			openaioption.WithRequestTimeout(defaultTimeout),
-		),
+		client: newOpenAIClient(cfg),
+	}, nil
+}
+
+func newOpenAIClient(cfg ResolvedProviderConfig) openai.Client {
+	return openai.NewClient(
+		openaioption.WithAPIKey(cfg.APIKey),
+		openaioption.WithBaseURL(cfg.BaseURL),
+		openaioption.WithRequestTimeout(defaultTimeout),
+	)
+}
+
+func (p *openAIProvider) Complete(ctx context.Context, req CompletionRequest) (CompletionResult, error) {
+	params := responses.ResponseNewParams{
+		Input: responses.ResponseNewParamsInputUnion{OfString: openai.String(req.User)},
+		Model: shared.ResponsesModel(req.Model),
+		Store: openai.Bool(false),
+	}
+	if req.System != "" {
+		params.Instructions = openai.String(req.System)
+	}
+
+	options, err := openAIResponseParamOptions(req.Params)
+	if err != nil {
+		return CompletionResult{}, err
+	}
+	options = append(options, openaioption.WithJSONSet("store", false))
+	resp, err := p.client.Responses.New(ctx, params, options...)
+	if err != nil {
+		return CompletionResult{}, err
+	}
+	output := resp.OutputText()
+	if output == "" {
+		return CompletionResult{}, errors.New("provider returned no text content")
+	}
+	return CompletionResult{
+		Output:       output,
+		InputTokens:  int(resp.Usage.InputTokens),
+		OutputTokens: int(resp.Usage.OutputTokens),
 	}, nil
 }
 
@@ -239,6 +294,35 @@ func openAIParamOptions(params map[string]any) []openaioption.RequestOption {
 		options = append(options, openaioption.WithJSONSet(key, value))
 	}
 	return options
+}
+
+func openAIResponseParamOptions(params map[string]any) ([]openaioption.RequestOption, error) {
+	normalized := maps.Clone(params)
+	if _, ok := normalized["store"]; ok {
+		return nil, errors.New("provider openai fixes store=false; remove the store parameter")
+	}
+	if _, ok := normalized["seed"]; ok {
+		return nil, errors.New("provider openai uses the Responses API, which does not support seed; use provider openai-chat for Chat Completions parameters")
+	}
+
+	if _, ok := normalized["max_output_tokens"]; !ok {
+		if value, exists := normalized["max_completion_tokens"]; exists {
+			normalized["max_output_tokens"] = value
+		} else if value, exists := normalized["max_tokens"]; exists {
+			normalized["max_output_tokens"] = value
+		}
+	}
+	delete(normalized, "max_completion_tokens")
+	delete(normalized, "max_tokens")
+
+	if effort, ok := normalized["reasoning_effort"]; ok {
+		if _, exists := normalized["reasoning"]; exists {
+			return nil, errors.New("OpenAI parameters must not set both reasoning and reasoning_effort")
+		}
+		normalized["reasoning"] = map[string]any{"effort": effort}
+		delete(normalized, "reasoning_effort")
+	}
+	return openAIParamOptions(normalized), nil
 }
 
 type anthropicProvider struct {

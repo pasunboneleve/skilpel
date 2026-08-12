@@ -112,6 +112,7 @@ go test ./...
 - `go run ./cmd/skilpel version`
 - [CLI output](docs/cli-output.md)
 - [Eval files](docs/eval-files.md)
+- [Model providers](docs/providers.md)
 - [Changelog](CHANGELOG.md)
 
 For a complete repository model with skills and evals kept close together, see

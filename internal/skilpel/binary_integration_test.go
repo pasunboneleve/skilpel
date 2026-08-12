@@ -25,7 +25,7 @@ func TestCompiledBinaryRunsShellScriptYAMLEvalFixture(t *testing.T) {
 		t.Fatalf("build skilpel: %v\n%s", err, output)
 	}
 
-	server := httptest.NewServer(http.HandlerFunc(fakeChatCompletions))
+	server := httptest.NewServer(http.HandlerFunc(fakeOpenAIResponses))
 	t.Cleanup(server.Close)
 	t.Setenv("SKILPEL_TEST_API_KEY", "test-key")
 
@@ -138,17 +138,16 @@ func testRepoRoot(t *testing.T) string {
 	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
 }
 
-func fakeChatCompletions(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/chat/completions" {
+func fakeOpenAIResponses(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/responses" {
 		http.NotFound(w, r)
 		return
 	}
 	var req struct {
-		Model    string `json:"model"`
-		Messages []struct {
-			Role    string `json:"role"`
-			Content string `json:"content"`
-		} `json:"messages"`
+		Model        string `json:"model"`
+		Instructions string `json:"instructions"`
+		Input        string `json:"input"`
+		Store        *bool  `json:"store"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -158,40 +157,46 @@ func fakeChatCompletions(w http.ResponseWriter, r *http.Request) {
 	content := ""
 	switch req.Model {
 	case "target":
-		if requestIncludesSkill(req.Messages) {
+		if strings.Contains(req.Instructions, "<skill name=\"shell-script\">") {
 			content = "```bash\n#!/usr/bin/env bash\nset -euo pipefail\n\ngit branch --show-current\ngit status --short\n```"
 		} else {
 			content = "```bash\n#!/usr/bin/env bash\n\ngit branch --show-current\ngit status --short\n```"
 		}
 	case "judge":
-		prompt := req.Messages[len(req.Messages)-1].Content
-		content = fakeJudgeOutput(prompt)
+		content = fakeJudgeOutput(req.Input)
 	default:
 		http.Error(w, "unexpected model "+req.Model, http.StatusBadRequest)
+		return
+	}
+	if req.Store == nil || *req.Store {
+		http.Error(w, "expected store=false", http.StatusBadRequest)
 		return
 	}
 
 	w.Header().Set("content-type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]any{
-		"choices": []map[string]any{
-			{"message": map[string]string{"content": content}},
+		"id":     "resp_test",
+		"object": "response",
+		"status": "completed",
+		"output": []map[string]any{
+			{
+				"id":     "msg_test",
+				"type":   "message",
+				"role":   "assistant",
+				"status": "completed",
+				"content": []map[string]any{
+					{"type": "output_text", "text": content, "annotations": []any{}},
+				},
+			},
 		},
-		"usage": map[string]int{"prompt_tokens": 1, "completion_tokens": 1},
+		"usage": map[string]any{
+			"input_tokens":  1,
+			"output_tokens": 1,
+			"total_tokens":  2,
+		},
 	}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-}
-
-func requestIncludesSkill(messages []struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}) bool {
-	for _, message := range messages {
-		if message.Role == "system" && strings.Contains(message.Content, "<skill name=\"shell-script\">") {
-			return true
-		}
-	}
-	return false
 }
 
 func fakeJudgeOutput(prompt string) string {

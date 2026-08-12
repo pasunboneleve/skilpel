@@ -4,6 +4,24 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Add an `openai-chat` provider for models and compatible endpoints that still
+  require Chat Completions.
+
+### Changed
+
+- Route the default OpenAI provider through the Responses API with response
+  storage disabled.
+- Update the official OpenAI Go SDK from 3.37.0 to 3.47.0.
+- Convert legacy OpenAI token-limit and reasoning-effort parameter names to
+  their Responses equivalents.
+
+### Fixed
+
+- Reject Chat-only `seed` parameters before sending an invalid Responses
+  request.
+
 ## [0.3.1] - 2026-06-01
 
 ### Documentation
